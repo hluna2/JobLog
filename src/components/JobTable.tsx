@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Copy,
   Check,
@@ -13,7 +13,9 @@ import {
   Globe,
   MapPin,
   Calendar,
-  ArrowUpDown
+  ArrowUpDown,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { JobApplication, JobStatus } from '../types';
 import { formatDaysAgo, calculateDaysAgoNumber } from '../utils/date';
@@ -60,6 +62,26 @@ export const JobTable: React.FC<JobTableProps> = ({
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [jobToDelete, setJobToDelete] = useState<JobApplication | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-expand if the actively selected job is outside the latest 10
+  useEffect(() => {
+    if (selectedJobId && !showAll) {
+      const idx = filteredJobs.findIndex(j => j.id === selectedJobId);
+      if (idx >= 10) {
+        setShowAll(true);
+      }
+    }
+  }, [selectedJobId, filteredJobs, showAll]);
+
+  // Sliced jobs based on showAll
+  const displayedJobs = useMemo(() => {
+    if (showAll || filteredJobs.length <= 10) {
+      return filteredJobs;
+    }
+    return filteredJobs.slice(0, 10);
+  }, [filteredJobs, showAll]);
 
   const handleCopy = (e: React.MouseEvent, key: string, value: string) => {
     e.stopPropagation();
@@ -186,32 +208,87 @@ export const JobTable: React.FC<JobTableProps> = ({
         </div>
       </div>
 
-      {/* Main Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* Main Table Card */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden flex flex-col">
+        {/* Table Top Bar with count and Show All toggle */}
+        <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 text-slate-600 font-medium">
+            <span className="font-semibold text-slate-800">Applications List</span>
+            <span className="text-slate-300">|</span>
+            {filteredJobs.length <= 10 ? (
+              <span className="text-slate-500">
+                Showing all <strong>{filteredJobs.length}</strong> applications
+              </span>
+            ) : showAll ? (
+              <span className="text-slate-700">
+                Showing all <strong className="text-indigo-600 font-bold">{filteredJobs.length}</strong> applications (scroll internally below)
+              </span>
+            ) : (
+              <span className="text-slate-600">
+                Showing latest <strong className="text-slate-900 font-bold">10</strong> of <strong>{filteredJobs.length}</strong> applications
+              </span>
+            )}
+          </div>
+
+          {filteredJobs.length > 10 && (
+            <button
+              onClick={() => {
+                const next = !showAll;
+                setShowAll(next);
+                if (next && tableScrollRef.current) {
+                  tableScrollRef.current.scrollTop = 0;
+                }
+              }}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition flex items-center gap-1.5 shadow-2xs ${
+                showAll
+                  ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+              }`}
+            >
+              {showAll ? (
+                <>
+                  <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                  Show Latest 10 Only
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-3.5 h-3.5 text-indigo-600" />
+                  Expand to Show All ({filteredJobs.length})
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Scrollable Table Viewport with Internal Scrolling */}
+        <div
+          ref={tableScrollRef}
+          className="overflow-x-auto overflow-y-auto max-h-[560px] focus:outline-none"
+          tabIndex={0}
+        >
           <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 select-none">
-                <th className="py-2.5 px-3 w-8 text-center">#</th>
-                <th className="py-2.5 px-3">Date Applied</th>
-                <th className="py-2.5 px-3">Employer / Company</th>
-                <th className="py-2.5 px-3">Job Title & Location</th>
-                <th className="py-2.5 px-3">Website & Phone</th>
-                <th className="py-2.5 px-3">Source & Method</th>
-                <th className="py-2.5 px-3">Status</th>
-                <th className="py-2.5 px-3">Result / Notes</th>
-                <th className="py-2.5 px-3 text-right">Actions</th>
+            <thead className="sticky top-0 bg-slate-50 z-10 border-b border-slate-200 shadow-xs select-none">
+              <tr className="text-slate-600 font-semibold">
+                <th className="py-2.5 px-3 w-8 text-center bg-slate-50">#</th>
+                <th className="py-2.5 px-3 bg-slate-50">Date Applied</th>
+                <th className="py-2.5 px-3 bg-slate-50">Employer / Company</th>
+                <th className="py-2.5 px-3 bg-slate-50">Job Title & Location</th>
+                <th className="py-2.5 px-3 bg-slate-50">Website & Phone</th>
+                <th className="py-2.5 px-3 bg-slate-50">Source & Method</th>
+                <th className="py-2.5 px-3 bg-slate-50">Status</th>
+                <th className="py-2.5 px-3 bg-slate-50">Result / Notes</th>
+                <th className="py-2.5 px-3 text-right bg-slate-50">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredJobs.length === 0 ? (
+              {displayedJobs.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-10 text-center text-slate-400">
                     No applications found matching your search.
                   </td>
                 </tr>
               ) : (
-                filteredJobs.map((job, idx) => {
+                displayedJobs.map((job, idx) => {
                   const isSelected = selectedJobId === job.id;
                   const rowClass = getRowBackground(job, isSelected);
                   const dynamicDaysAgo = formatDaysAgo(job.dateApplied);
@@ -428,6 +505,67 @@ export const JobTable: React.FC<JobTableProps> = ({
             </tbody>
           </table>
         </div>
+
+        {/* Table Bottom Footer / Quick Action */}
+        {filteredJobs.length > 10 && (
+          <div className="bg-slate-50 border-t border-slate-200 py-2.5 px-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-600">
+            <div>
+              {showAll ? (
+                <span>
+                  Showing all <strong className="text-indigo-600 font-bold">{filteredJobs.length}</strong> applications (scroll internally above)
+                </span>
+              ) : (
+                <span>
+                  Showing latest <strong className="text-slate-900 font-bold">10</strong> of <strong>{filteredJobs.length}</strong> applications
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {showAll && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (tableScrollRef.current) {
+                      tableScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                  }}
+                  className="px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 transition shadow-2xs"
+                >
+                  Back to Top
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  const nextShowAll = !showAll;
+                  setShowAll(nextShowAll);
+                  if (nextShowAll && tableScrollRef.current) {
+                    tableScrollRef.current.scrollTop = 0;
+                  }
+                }}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg border transition flex items-center gap-1.5 shadow-2xs ${
+                  showAll
+                    ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white border-transparent'
+                }`}
+              >
+                {showAll ? (
+                  <>
+                    <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                    Collapse to Latest 10
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-3.5 h-3.5 text-white" />
+                    Expand to Show All ({filteredJobs.length})
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Custom Accessible Delete Confirmation Modal */}
