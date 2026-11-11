@@ -4,6 +4,7 @@ import {
   JobStatus,
   WeeklySummaryLog,
   WeeklyConfirmationRecord,
+  AppealRecord,
   PartTimeEarningsRecord,
   PrivacySettings,
   ClaimantProfile,
@@ -21,6 +22,8 @@ import {
   saveWeeklySummaries,
   getWeeklyConfirmations,
   saveWeeklyConfirmations,
+  getAppeals,
+  saveAppeals,
   getPartTimeEarnings,
   savePartTimeEarnings,
   getConfiguredJobs,
@@ -57,6 +60,7 @@ export const App: React.FC = () => {
   const [jobs, setJobs] = useState<JobApplication[]>(() => getJobApplications());
   const [weeklySummaries, setWeeklySummaries] = useState<WeeklySummaryLog[]>(() => getWeeklySummaries());
   const [confirmations, setConfirmations] = useState<WeeklyConfirmationRecord[]>(() => getWeeklyConfirmations());
+  const [appeals, setAppeals] = useState<AppealRecord[]>(() => getAppeals());
   const [earnings, setEarnings] = useState<PartTimeEarningsRecord[]>(() => getPartTimeEarnings());
   const [configuredJobs, setConfiguredJobs] = useState<ConfiguredJob[]>(() => getConfiguredJobs());
   const [profile, setProfile] = useState<ClaimantProfile>(() => getClaimantProfile());
@@ -150,6 +154,10 @@ export const App: React.FC = () => {
   useEffect(() => {
     saveWeeklyConfirmations(confirmations);
   }, [confirmations]);
+
+  useEffect(() => {
+    saveAppeals(appeals);
+  }, [appeals]);
 
   useEffect(() => {
     savePartTimeEarnings(earnings);
@@ -280,6 +288,30 @@ export const App: React.FC = () => {
 
   const handleDeleteConfirmation = (id: string) => {
     setConfirmations(prev => prev.filter(c => c.id !== id));
+  };
+
+  const handleAddAppeal = (record: AppealRecord) => {
+    setAppeals(prev => {
+      const updated = [...prev, record];
+      saveAppeals(updated);
+      return updated;
+    });
+  };
+
+  const handleUpdateAppeal = (record: AppealRecord) => {
+    setAppeals(prev => {
+      const updated = prev.map(a => (a.id === record.id ? record : a));
+      saveAppeals(updated);
+      return updated;
+    });
+  };
+
+  const handleDeleteAppeal = (id: string) => {
+    setAppeals(prev => {
+      const updated = prev.filter(a => a.id !== id);
+      saveAppeals(updated);
+      return updated;
+    });
   };
 
   const handleAddWeeklySummary = (summary: WeeklySummaryLog) => {
@@ -457,10 +489,14 @@ export const App: React.FC = () => {
             jobs={jobs}
             weeklySummaries={weeklySummaries}
             confirmations={confirmations}
+            appeals={appeals}
             selectedState={preferences.selectedState}
             onAddConfirmation={handleAddConfirmation}
             onUpdateConfirmation={handleUpdateConfirmation}
             onDeleteConfirmation={handleDeleteConfirmation}
+            onAddAppeal={handleAddAppeal}
+            onUpdateAppeal={handleUpdateAppeal}
+            onDeleteAppeal={handleDeleteAppeal}
             onAddWeeklySummary={handleAddWeeklySummary}
             onUpdateWeeklySummary={handleUpdateWeeklySummary}
             onDeleteWeeklySummary={handleDeleteWeeklySummary}

@@ -9,12 +9,14 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
-  AlertCircle
+  AlertCircle,
+  FileText
 } from 'lucide-react';
 import {
   JobApplication,
   WeeklySummaryLog,
-  WeeklyConfirmationRecord
+  WeeklyConfirmationRecord,
+  AppealRecord
 } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 
@@ -22,10 +24,14 @@ interface WeeklyComplianceViewProps {
   jobs: JobApplication[];
   weeklySummaries: WeeklySummaryLog[];
   confirmations: WeeklyConfirmationRecord[];
+  appeals: AppealRecord[];
   selectedState: string;
   onAddConfirmation: (record: WeeklyConfirmationRecord) => void;
   onUpdateConfirmation: (record: WeeklyConfirmationRecord) => void;
   onDeleteConfirmation: (id: string) => void;
+  onAddAppeal: (record: AppealRecord) => void;
+  onUpdateAppeal: (record: AppealRecord) => void;
+  onDeleteAppeal: (id: string) => void;
   onAddWeeklySummary: (summary: WeeklySummaryLog) => void;
   onUpdateWeeklySummary: (summary: WeeklySummaryLog) => void;
   onDeleteWeeklySummary: (id: string) => void;
@@ -35,25 +41,35 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
   jobs,
   weeklySummaries,
   confirmations,
+  appeals,
   selectedState,
   onAddConfirmation,
   onUpdateConfirmation,
   onDeleteConfirmation,
+  onAddAppeal,
+  onUpdateAppeal,
+  onDeleteAppeal,
   onAddWeeklySummary,
   onUpdateWeeklySummary,
   onDeleteWeeklySummary,
 }) => {
-  // Confirmations Modal State
+  // 1. Weekly Confirmation Numbers Modal State
   const [showConfModal, setShowConfModal] = useState(false);
   const [editingConf, setEditingConf] = useState<WeeklyConfirmationRecord | null>(null);
   const [confWeekEnding, setConfWeekEnding] = useState('');
   const [confNum, setConfNum] = useState('');
-  const [confAppealDate, setConfAppealDate] = useState('');
-  const [confAppealNum, setConfAppealNum] = useState('');
-  const [confCourt, setConfCourt] = useState('');
   const [confNotes, setConfNotes] = useState('');
 
-  // Weekly Activity Modal State
+  // 2. Appeals & Hearings Modal State (Separate Table!)
+  const [showAppealModal, setShowAppealModal] = useState(false);
+  const [editingAppeal, setEditingAppeal] = useState<AppealRecord | null>(null);
+  const [appealDate, setAppealDate] = useState('');
+  const [appealConfNum, setAppealConfNum] = useState('');
+  const [appealCourt, setAppealCourt] = useState('');
+  const [appealRelatedWeek, setAppealRelatedWeek] = useState('');
+  const [appealNotes, setAppealNotes] = useState('');
+
+  // 3. Weekly Activity Modal State
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [editingActivity, setEditingActivity] = useState<WeeklySummaryLog | null>(null);
   const [actWeekStart, setActWeekStart] = useState('');
@@ -65,10 +81,21 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
 
   // Delete Confirmation Modal States
   const [confToDelete, setConfToDelete] = useState<WeeklyConfirmationRecord | null>(null);
+  const [appealToDelete, setAppealToDelete] = useState<AppealRecord | null>(null);
   const [actToDelete, setActToDelete] = useState<WeeklySummaryLog | null>(null);
   const [showCleanEmptyModal, setShowCleanEmptyModal] = useState(false);
 
-  // Count empty/placeholder rows
+  // Show all vs show last 5 state
+  const [showAllConfirmations, setShowAllConfirmations] = useState(false);
+  const [showAllAppeals, setShowAllAppeals] = useState(false);
+  const [showAllActivity, setShowAllActivity] = useState(false);
+
+  // Scroll container refs to auto-scroll to bottom on "Show All"
+  const confScrollRef = useRef<HTMLDivElement>(null);
+  const appealScrollRef = useRef<HTMLDivElement>(null);
+  const actScrollRef = useRef<HTMLDivElement>(null);
+
+  // Count empty/placeholder rows in weekly activity
   const emptyRows = weeklySummaries.filter(
     w =>
       !w.weekStart ||
@@ -86,23 +113,23 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
     setShowCleanEmptyModal(false);
   };
 
-  // Show all vs show last 5 state
-  const [showAllConfirmations, setShowAllConfirmations] = useState(false);
-  const [showAllActivity, setShowAllActivity] = useState(false);
-
-  // Scroll container refs to auto-scroll to bottom on "Show All"
-  const confScrollRef = useRef<HTMLDivElement>(null);
-  const actScrollRef = useRef<HTMLDivElement>(null);
-
   // Sort confirmations oldest to most recent (ascending order)
   const sortedConfirmations = [...confirmations].sort(
     (a, b) => new Date(a.weekEnding).getTime() - new Date(b.weekEnding).getTime()
   );
 
-  // Show only last 5 by default, or all
   const displayedConfirmations = showAllConfirmations
     ? sortedConfirmations
     : sortedConfirmations.slice(-5);
+
+  // Sort appeals oldest to most recent (ascending order)
+  const sortedAppeals = [...appeals].sort(
+    (a, b) => new Date(a.appealDate || '1970-01-01').getTime() - new Date(b.appealDate || '1970-01-01').getTime()
+  );
+
+  const displayedAppeals = showAllAppeals
+    ? sortedAppeals
+    : sortedAppeals.slice(-5);
 
   // Sort weekly activity oldest to most recent (ascending order)
   const sortedWeekly = [...weeklySummaries].sort(
@@ -113,12 +140,18 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
     ? sortedWeekly
     : sortedWeekly.slice(-5);
 
-  // When toggling Show All, scroll to bottom of internal container so the last 5 remain in view and user can scroll up
+  // Auto-scroll to bottom on Show All
   useEffect(() => {
     if (showAllConfirmations && confScrollRef.current) {
       confScrollRef.current.scrollTop = confScrollRef.current.scrollHeight;
     }
   }, [showAllConfirmations]);
+
+  useEffect(() => {
+    if (showAllAppeals && appealScrollRef.current) {
+      appealScrollRef.current.scrollTop = appealScrollRef.current.scrollHeight;
+    }
+  }, [showAllAppeals]);
 
   useEffect(() => {
     if (showAllActivity && actScrollRef.current) {
@@ -131,9 +164,6 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
     setEditingConf(null);
     setConfWeekEnding('');
     setConfNum('');
-    setConfAppealDate('');
-    setConfAppealNum('');
-    setConfCourt('');
     setConfNotes('');
     setShowConfModal(true);
   };
@@ -142,9 +172,6 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
     setEditingConf(record);
     setConfWeekEnding(record.weekEnding);
     setConfNum(record.confirmationNumber);
-    setConfAppealDate(record.appealDate || '');
-    setConfAppealNum(record.appealConfirmation || '');
-    setConfCourt(record.court || '');
     setConfNotes(record.notes || '');
     setShowConfModal(true);
   };
@@ -161,9 +188,6 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
         ...editingConf,
         weekEnding: confWeekEnding,
         confirmationNumber: confNum,
-        appealDate: confAppealDate || undefined,
-        appealConfirmation: confAppealNum || undefined,
-        court: confCourt || undefined,
         notes: confNotes || undefined,
       });
     } else {
@@ -171,13 +195,60 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
         id: 'conf-' + Math.random().toString(36).substring(2, 9),
         weekEnding: confWeekEnding,
         confirmationNumber: confNum,
-        appealDate: confAppealDate || undefined,
-        appealConfirmation: confAppealNum || undefined,
-        court: confCourt || undefined,
         notes: confNotes || undefined,
       });
     }
     setShowConfModal(false);
+  };
+
+  // Appeal Handlers (Separate Table!)
+  const handleOpenAddAppeal = () => {
+    setEditingAppeal(null);
+    setAppealDate('');
+    setAppealConfNum('');
+    setAppealCourt('Appeals Tribunal');
+    setAppealRelatedWeek('');
+    setAppealNotes('');
+    setShowAppealModal(true);
+  };
+
+  const handleOpenEditAppeal = (record: AppealRecord) => {
+    setEditingAppeal(record);
+    setAppealDate(record.appealDate);
+    setAppealConfNum(record.appealConfirmation);
+    setAppealCourt(record.court);
+    setAppealRelatedWeek(record.relatedWeekEnding || '');
+    setAppealNotes(record.notes || '');
+    setShowAppealModal(true);
+  };
+
+  const handleSaveAppeal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appealDate && !appealConfNum && !appealCourt) {
+      alert('Please provide at least an appeal date, confirmation/decision #, or tribunal name.');
+      return;
+    }
+
+    if (editingAppeal) {
+      onUpdateAppeal({
+        ...editingAppeal,
+        appealDate,
+        appealConfirmation: appealConfNum,
+        court: appealCourt,
+        relatedWeekEnding: appealRelatedWeek || undefined,
+        notes: appealNotes || undefined,
+      });
+    } else {
+      onAddAppeal({
+        id: 'appeal-' + Math.random().toString(36).substring(2, 9),
+        appealDate,
+        appealConfirmation: appealConfNum,
+        court: appealCourt,
+        relatedWeekEnding: appealRelatedWeek || undefined,
+        notes: appealNotes || undefined,
+      });
+    }
+    setShowAppealModal(false);
   };
 
   // Activity Log Handlers
@@ -250,11 +321,11 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
               <span className="bg-slate-800 text-slate-300 text-[11px] px-2 py-0.5 rounded font-mono">
                 {selectedState} Unemployment
               </span>
-              <span className="text-xs text-slate-400">Weekly Work Search Proof</span>
+              <span className="text-xs text-slate-400">Weekly Work Search & Legal Proof</span>
             </div>
-            <h2 className="text-base font-bold text-white">Weekly Certification & Confirmation Logs</h2>
+            <h2 className="text-base font-bold text-white">Weekly Certifications & Confirmation Logs</h2>
             <p className="text-xs text-slate-300 max-w-2xl leading-relaxed mt-0.5">
-              Keep your weekly submission confirmation numbers and hearing records in chronological order for audit documentation.
+              Keep your weekly certification numbers, tribunal appeals, and 3-minimum work search records organized for audit verification.
             </p>
           </div>
 
@@ -273,24 +344,33 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
 
             <button
               onClick={handleOpenAddConf}
-              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition"
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition shadow-2xs"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Record Confirmation #</span>
+            </button>
+
+            <button
+              onClick={handleOpenAddAppeal}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition border border-slate-700"
+            >
+              <Scale className="w-3.5 h-3.5 text-amber-400" />
+              <span>Record Appeal / Hearing</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* 1. Confirmation Numbers Table with Internal Scrolling & Last 5 filter */}
+      {/* 1. Weekly Certification Submission Confirmations Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
         <div className="p-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 bg-slate-50/50">
           <div>
-            <h3 className="font-bold text-slate-800 text-xs sm:text-sm">
-              MyUI Submission Confirmation Numbers & Appeals
+            <h3 className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>Weekly Submission Confirmation Numbers</span>
             </h3>
             <p className="text-[11px] text-slate-500">
-              Showing {displayedConfirmations.length} of {sortedConfirmations.length} records (Oldest to Newest)
+              Showing {displayedConfirmations.length} of {sortedConfirmations.length} certification confirmation numbers (Oldest to Newest)
             </p>
           </div>
 
@@ -324,7 +404,7 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
           </div>
         </div>
 
-        {/* Internal Scroll Container so the whole webpage does not scroll */}
+        {/* Internal Scroll Container */}
         <div
           ref={confScrollRef}
           className={`${
@@ -335,19 +415,17 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
             <thead className="sticky top-0 bg-slate-100 z-10">
               <tr className="text-slate-600 font-semibold border-b border-slate-200">
                 <th className="py-2 px-3 w-8 text-center">#</th>
-                <th className="py-2 px-3">Week Ending</th>
+                <th className="py-2 px-3">Benefit Week Ending</th>
                 <th className="py-2 px-3">Confirmation #</th>
                 <th className="py-2 px-3">Status</th>
-                <th className="py-2 px-3">Appeal Date</th>
-                <th className="py-2 px-3">Appeal Confirmation #</th>
-                <th className="py-2 px-3">Court / Tribunal</th>
+                <th className="py-2 px-3">Submission Notes</th>
                 <th className="py-2 px-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {displayedConfirmations.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-6 text-center text-slate-400">
+                  <td colSpan={6} className="py-6 text-center text-slate-400">
                     No confirmation records saved yet.
                   </td>
                 </tr>
@@ -371,27 +449,8 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
                         Certified
                       </span>
                     </td>
-                    <td className="py-2 px-3 text-slate-600 font-mono whitespace-nowrap">
-                      {conf.appealDate || '—'}
-                    </td>
-                    <td className="py-2 px-3 font-mono text-slate-700 whitespace-nowrap">
-                      {conf.appealConfirmation ? (
-                        <span className="bg-slate-100 px-2 py-0.5 rounded font-bold">
-                          {conf.appealConfirmation}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="py-2 px-3">
-                      {conf.court ? (
-                        <div className="flex items-center gap-1 text-slate-800 font-medium">
-                          <Scale className="w-3 h-3 text-slate-400" />
-                          <span>{conf.court}</span>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
+                    <td className="py-2 px-3 text-slate-600 max-w-xs truncate">
+                      {conf.notes || <span className="text-slate-300 italic">—</span>}
                     </td>
                     <td className="py-2 px-3 text-right whitespace-nowrap">
                       <button
@@ -417,15 +476,143 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
         </div>
       </div>
 
-      {/* 2. Weekly Activity Log Table with Internal Scrolling & Last 5 filter */}
+      {/* 2. Appeals, Hearings & Tribunal Records Table (SEPARATE TABLE) */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
         <div className="p-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 bg-slate-50/50">
           <div>
-            <h3 className="font-bold text-slate-800 text-xs sm:text-sm">
-              Weekly Activity Log & Networking Archive
+            <h3 className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-1.5">
+              <Scale className="w-4 h-4 text-amber-600" />
+              <span>Appeals, Hearings & Tribunal Records</span>
             </h3>
             <p className="text-[11px] text-slate-500">
-              Showing {displayedWeekly.length} of {sortedWeekly.length} weeks (Oldest to Newest)
+              Showing {displayedAppeals.length} of {sortedAppeals.length} legal & hearing records (Oldest to Newest)
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {sortedAppeals.length > 5 && (
+              <button
+                onClick={() => setShowAllAppeals(!showAllAppeals)}
+                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition flex items-center gap-1"
+              >
+                {showAllAppeals ? (
+                  <>
+                    <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Show Last 5 Only</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Show All ({sortedAppeals.length}) & Scroll Up</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            <button
+              onClick={handleOpenAddAppeal}
+              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg border border-slate-200 flex items-center gap-1 transition"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Add Appeal</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Internal Scroll Container */}
+        <div
+          ref={appealScrollRef}
+          className={`${
+            showAllAppeals ? 'max-h-[300px] overflow-y-auto' : ''
+          } overflow-x-auto`}
+        >
+          <table className="w-full text-left text-xs border-collapse">
+            <thead className="sticky top-0 bg-slate-100 z-10">
+              <tr className="text-slate-600 font-semibold border-b border-slate-200">
+                <th className="py-2 px-3 w-8 text-center">#</th>
+                <th className="py-2 px-3">Appeal Date</th>
+                <th className="py-2 px-3">Appeal / Decision #</th>
+                <th className="py-2 px-3">Court / Tribunal / Status</th>
+                <th className="py-2 px-3">Related Week</th>
+                <th className="py-2 px-3">Hearing Notes</th>
+                <th className="py-2 px-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {displayedAppeals.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-6 text-center text-slate-400">
+                    No appeal or hearing records logged yet.
+                  </td>
+                </tr>
+              ) : (
+                displayedAppeals.map((app, idx) => (
+                  <tr key={app.id} className="hover:bg-slate-50 transition">
+                    <td className="py-2 px-3 text-center text-slate-400 font-mono text-[11px]">
+                      {idx + 1}
+                    </td>
+                    <td className="py-2 px-3 font-mono font-medium text-slate-800 whitespace-nowrap">
+                      {app.appealDate || <span className="text-slate-400 italic">—</span>}
+                    </td>
+                    <td className="py-2 px-3 font-mono">
+                      {app.appealConfirmation ? (
+                        <span className="font-bold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          {app.appealConfirmation}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3">
+                      {app.court ? (
+                        <span className="inline-flex items-center gap-1 font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                          <Scale className="w-3 h-3 text-amber-600" />
+                          <span>{app.court}</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 font-mono text-slate-600 whitespace-nowrap">
+                      {app.relatedWeekEnding || '—'}
+                    </td>
+                    <td className="py-2 px-3 text-slate-600 max-w-xs truncate">
+                      {app.notes || <span className="text-slate-300 italic">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => handleOpenEditAppeal(app)}
+                        className="p-1 text-slate-400 hover:text-indigo-600 transition mr-1"
+                        title="Edit appeal record"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setAppealToDelete(app)}
+                        className="p-1 text-slate-400 hover:text-rose-600 transition"
+                        title="Delete appeal record"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 3. Weekly Activity Log Table with Internal Scrolling & Last 5 filter */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+        <div className="p-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 bg-slate-50/50">
+          <div>
+            <h3 className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-indigo-600" />
+              <span>Weekly Work Search Activity Log</span>
+            </h3>
+            <p className="text-[11px] text-slate-500">
+              Showing {displayedWeekly.length} of {sortedWeekly.length} weeks (Oldest to Newest) • Minimum 3 qualifying activities/week
             </p>
           </div>
 
@@ -585,7 +772,7 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
           <div className="bg-white rounded-xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
               <h3 className="font-bold text-sm">
-                {editingConf ? 'Edit Confirmation Record' : 'Record Weekly Confirmation'}
+                {editingConf ? 'Edit Confirmation Record' : 'Record Weekly Confirmation #'}
               </h3>
               <button
                 onClick={() => setShowConfModal(false)}
@@ -624,48 +811,10 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Appeal Date (Optional)
-                </label>
-                <input
-                  type="date"
-                  value={confAppealDate}
-                  onChange={e => setConfAppealDate(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-mono outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Appeal Confirmation # (Optional)
-                </label>
+                <label className="block text-slate-700 font-bold mb-1">Notes (Optional)</label>
                 <input
                   type="text"
-                  placeholder="e.g. 796054"
-                  value={confAppealNum}
-                  onChange={e => setConfAppealNum(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-mono outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Court / Tribunal / Status
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Appeals Tribunal, Board of Review"
-                  value={confCourt}
-                  onChange={e => setConfCourt(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">Notes</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Certification submitted on Sunday"
+                  placeholder="e.g. Certified on Sunday evening via MyUI"
                   value={confNotes}
                   onChange={e => setConfNotes(e.target.value)}
                   className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg outline-none"
@@ -684,7 +833,106 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
                   type="submit"
                   className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg"
                 >
-                  {editingConf ? 'Save Changes' : 'Save Record'}
+                  {editingConf ? 'Save Changes' : 'Save Confirmation #'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Appeal Add/Edit Modal (SEPARATE MODAL) */}
+      {showAppealModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
+              <h3 className="font-bold text-sm flex items-center gap-1.5">
+                <Scale className="w-4 h-4 text-amber-400" />
+                <span>{editingAppeal ? 'Edit Appeal / Hearing Record' : 'Record Appeal / Tribunal Hearing'}</span>
+              </h3>
+              <button
+                onClick={() => setShowAppealModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAppeal} className="p-5 space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Appeal / Hearing Date
+                </label>
+                <input
+                  type="date"
+                  value={appealDate}
+                  onChange={e => setAppealDate(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-mono outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Appeal Confirmation # / Docket / Decision #
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 796054 or Docket #1234"
+                  value={appealConfNum}
+                  onChange={e => setAppealConfNum(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-mono font-bold outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Court / Tribunal / Status
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Appeals Tribunal, Board of Review, Hearing Remand"
+                  value={appealCourt}
+                  onChange={e => setAppealCourt(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Related Benefit Week Ending Date (Optional)
+                </label>
+                <input
+                  type="date"
+                  value={appealRelatedWeek}
+                  onChange={e => setAppealRelatedWeek(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-mono outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Hearing Notes / Decision Details</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Hearing scheduled with Administrative Hearing Officer"
+                  value={appealNotes}
+                  onChange={e => setAppealNotes(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAppealModal(false)}
+                  className="px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg"
+                >
+                  {editingAppeal ? 'Save Changes' : 'Save Appeal Record'}
                 </button>
               </div>
             </form>
@@ -803,6 +1051,7 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
           </div>
         </div>
       )}
+
       {/* Confirmation Deletion Modal */}
       <ConfirmModal
         isOpen={!!confToDelete}
@@ -822,6 +1071,27 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
           }
         }}
         onClose={() => setConfToDelete(null)}
+      />
+
+      {/* Appeal Deletion Modal */}
+      <ConfirmModal
+        isOpen={!!appealToDelete}
+        title="Delete Appeal Record"
+        message={
+          <span>
+            Are you sure you want to delete the appeal record for{' '}
+            <strong>{appealToDelete?.court || 'Tribunal'}</strong> (Date: {appealToDelete?.appealDate || 'N/A'}, Conf/Decision #{appealToDelete?.appealConfirmation || 'N/A'})?
+          </span>
+        }
+        confirmLabel="Delete Appeal"
+        confirmVariant="danger"
+        onConfirm={() => {
+          if (appealToDelete) {
+            onDeleteAppeal(appealToDelete.id);
+            setAppealToDelete(null);
+          }
+        }}
+        onClose={() => setAppealToDelete(null)}
       />
 
       {/* Activity Log Deletion Modal */}

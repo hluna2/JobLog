@@ -18,7 +18,7 @@ export function evaluateHoursExpression(input: string): number {
   // If simple plain number
   if (/^-?\d+(\.\d+)?$/.test(expr)) {
     const val = parseFloat(expr);
-    return isNaN(val) ? 0 : roundHours(val);
+    return isNaN(val) ? 0 : roundHours(val, 3);
   }
 
   try {
@@ -95,11 +95,11 @@ export function evaluateHoursExpression(input: string): number {
     }
 
     const result = parseExpression();
-    return isNaN(result) ? 0 : roundHours(result);
+    return isNaN(result) ? 0 : roundHours(result, 3);
   } catch {
     // If parsing fails, attempt fallback to parseFloat
     const fallback = parseFloat(expr);
-    return isNaN(fallback) ? 0 : roundHours(fallback);
+    return isNaN(fallback) ? 0 : roundHours(fallback, 3);
   }
 }
 
@@ -114,9 +114,17 @@ export function isFormulaString(input: string): boolean {
 }
 
 /**
- * Rounds hours to 2 decimal places to avoid floating point issues (e.g. 23.650000000000002 -> 23.65).
+ * Rounds hours to 3 decimal places (e.g. 23.655).
  */
-export function roundHours(value: number): number {
+export function roundHours(value: number, decimals: number = 3): number {
+  const factor = Math.pow(10, decimals);
+  return Math.round((value + Number.EPSILON) * factor) / factor;
+}
+
+/**
+ * Rounds dollar amounts to 2 decimal places (e.g. 402.14).
+ */
+export function roundCurrency(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 

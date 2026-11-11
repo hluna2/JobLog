@@ -68,10 +68,20 @@ export interface WeeklyConfirmationRecord {
   notes?: string;
 }
 
+export interface AppealRecord {
+  id: string;
+  appealDate: string;
+  appealConfirmation: string;
+  court: string;
+  relatedWeekEnding?: string;
+  notes?: string;
+}
+
 export interface ConfiguredJob {
   id: string;
   name: string;
   hourlyRate: number;
+  isActive?: boolean;
 }
 
 export interface EarningsJobEntry {

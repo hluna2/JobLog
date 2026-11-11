@@ -2,6 +2,7 @@ import {
   JobApplication,
   WeeklySummaryLog,
   WeeklyConfirmationRecord,
+  AppealRecord,
   PartTimeEarningsRecord,
   PrivacySettings,
   ClaimantProfile,
@@ -24,6 +25,7 @@ const STORAGE_KEYS = {
   JOBS: 'joblog_jobs_v1',
   WEEKLY: 'joblog_weekly_v1',
   CONFIRMATIONS: 'joblog_confirmations_v1',
+  APPEALS: 'joblog_appeals_v1',
   EARNINGS: 'joblog_earnings_v1',
   EARNINGS_JOBS: 'joblog_user_jobs_v1',
   PROFILE: 'joblog_profile_v1',
@@ -59,8 +61,8 @@ export function saveAppPreferences(prefs: AppPreferences): void {
 
 // Default Configured Jobs (Private to this device)
 export const DEFAULT_CONFIGURED_JOBS: ConfiguredJob[] = [
-  { id: 'job-1', name: 'Publix', hourlyRate: 17.00 },
-  { id: 'job-2', name: 'Chick-Fil-A', hourlyRate: 16.00 },
+  { id: 'job-1', name: 'Publix', hourlyRate: 17.00, isActive: true },
+  { id: 'job-2', name: 'Chick-Fil-A', hourlyRate: 16.00, isActive: true },
 ];
 
 export function getConfiguredJobs(): ConfiguredJob[] {
@@ -208,6 +210,43 @@ export function saveWeeklyConfirmations(records: WeeklyConfirmationRecord[]): vo
   }
 }
 
+export function getAppeals(): AppealRecord[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.APPEALS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+    // Auto-migrate from any confirmations that contain appeal details
+    const confs = getWeeklyConfirmations();
+    const extracted: AppealRecord[] = confs
+      .filter(c => c.appealDate || c.appealConfirmation || c.court)
+      .map(c => ({
+        id: 'appeal-' + c.id,
+        appealDate: c.appealDate || '',
+        appealConfirmation: c.appealConfirmation || '',
+        court: c.court || '',
+        relatedWeekEnding: c.weekEnding || '',
+        notes: c.notes || '',
+      }));
+    if (extracted.length > 0) {
+      saveAppeals(extracted);
+      return extracted;
+    }
+    return [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveAppeals(records: AppealRecord[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.APPEALS, JSON.stringify(records));
+  } catch (e) {
+    console.error('Failed to save appeals', e);
+  }
+}
+
 export function getPartTimeEarnings(): PartTimeEarningsRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.EARNINGS);
@@ -261,6 +300,7 @@ export function exportFullBackup(): string {
     jobs: getJobApplications(),
     weekly: getWeeklySummaries(),
     confirmations: getWeeklyConfirmations(),
+    appeals: getAppeals(),
     earnings: getPartTimeEarnings(),
     configuredJobs: getConfiguredJobs(),
     privacy: getPrivacySettings(),
@@ -279,6 +319,22 @@ export function importFullBackup(jsonString: string): { success: boolean; messag
     if (data.jobs) saveJobApplications(data.jobs);
     if (data.weekly) saveWeeklySummaries(data.weekly);
     if (data.confirmations) saveWeeklyConfirmations(data.confirmations);
+    if (data.appeals) {
+      saveAppeals(data.appeals);
+    } else if (data.confirmations) {
+      // Auto-extract appeals from confirmations if legacy backup format
+      const extracted = data.confirmations
+        .filter((c: any) => c.appealDate || c.appealConfirmation || c.court)
+        .map((c: any) => ({
+          id: 'appeal-' + c.id,
+          appealDate: c.appealDate || '',
+          appealConfirmation: c.appealConfirmation || '',
+          court: c.court || '',
+          relatedWeekEnding: c.weekEnding || '',
+          notes: c.notes || '',
+        }));
+      if (extracted.length > 0) saveAppeals(extracted);
+    }
     if (data.earnings) savePartTimeEarnings(data.earnings);
     if (data.configuredJobs) saveConfiguredJobs(data.configuredJobs);
     return { success: true, message: `Successfully restored ${data.jobs.length} jobs and records!` };
@@ -292,6 +348,7 @@ export function clearAllLocalData(): void {
   localStorage.removeItem(STORAGE_KEYS.JOBS);
   localStorage.removeItem(STORAGE_KEYS.WEEKLY);
   localStorage.removeItem(STORAGE_KEYS.CONFIRMATIONS);
+  localStorage.removeItem(STORAGE_KEYS.APPEALS);
   localStorage.removeItem(STORAGE_KEYS.EARNINGS);
   localStorage.removeItem(STORAGE_KEYS.EARNINGS_JOBS);
   localStorage.removeItem(STORAGE_KEYS.PROFILE);
