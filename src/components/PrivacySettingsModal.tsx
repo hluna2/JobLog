@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   X,
   ShieldCheck,
@@ -11,6 +11,7 @@ import {
   Check
 } from 'lucide-react';
 import { PrivacySettings } from '../types';
+import { ConfirmModal } from './ConfirmModal';
 
 interface PrivacySettingsModalProps {
   isOpen: boolean;
@@ -31,6 +32,8 @@ export const PrivacySettingsModal: React.FC<PrivacySettingsModalProps> = ({
   onClearAllData,
   onExportBackup,
 }) => {
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
   if (!isOpen) return null;
 
   const handleToggle = (key: keyof PrivacySettings) => {
@@ -169,16 +172,7 @@ export const PrivacySettingsModal: React.FC<PrivacySettingsModalProps> = ({
               </button>
 
               <button
-                onClick={() => {
-                  if (
-                    confirm(
-                      '⚠️ Are you sure you want to delete all stored jobs from this browser? Please make sure you have an exported backup first.'
-                    )
-                  ) {
-                    onClearAllData();
-                    onClose();
-                  }
-                }}
+                onClick={() => setShowClearConfirm(true)}
                 className="px-3 py-1.5 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg font-semibold flex items-center gap-1.5 transition"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -197,6 +191,19 @@ export const PrivacySettingsModal: React.FC<PrivacySettingsModalProps> = ({
           </button>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={showClearConfirm}
+        title="Clear All Local Data"
+        message="Are you sure you want to delete all stored jobs and records from this browser? Please make sure you have exported a backup JSON first."
+        confirmLabel="Clear All Data"
+        confirmVariant="danger"
+        onConfirm={() => {
+          onClearAllData();
+          onClose();
+        }}
+        onClose={() => setShowClearConfirm(false)}
+      />
     </div>
   );
 };

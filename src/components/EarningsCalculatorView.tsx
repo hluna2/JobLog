@@ -12,6 +12,8 @@ import {
   Briefcase
 } from 'lucide-react';
 import { PartTimeEarningsRecord, ConfiguredJob } from '../types';
+import { evaluateHoursExpression, isFormulaString, roundHours } from '../utils/math';
+import { ConfirmModal } from './ConfirmModal';
 
 interface EarningsCalculatorViewProps {
   earnings: PartTimeEarningsRecord[];
@@ -38,6 +40,7 @@ export const EarningsCalculatorView: React.FC<EarningsCalculatorViewProps> = ({
   const [hoursMap, setHoursMap] = useState<Record<string, string>>({});
   const [ratesMap, setRatesMap] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
+  const [recordToDelete, setRecordToDelete] = useState<PartTimeEarningsRecord | null>(null);
 
   // Configure Jobs Modal State
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -88,10 +91,10 @@ export const EarningsCalculatorView: React.FC<EarningsCalculatorViewProps> = ({
     setShowAddModal(true);
   };
 
-  // Live total calculation for new record
+  // Live total calculation for new record with Excel-style formula evaluation support
   let currentTotalGross = 0;
   configuredJobs.forEach(job => {
-    const h = parseFloat(hoursMap[job.id]) || 0;
+    const h = evaluateHoursExpression(hoursMap[job.id]);
     const r = parseFloat(ratesMap[job.id] !== undefined ? ratesMap[job.id] : job.hourlyRate.toString()) || 0;
     currentTotalGross += h * r;
   });
@@ -106,16 +109,16 @@ export const EarningsCalculatorView: React.FC<EarningsCalculatorViewProps> = ({
     const job1 = configuredJobs[0];
     const job2 = configuredJobs[1];
 
-    const j1Hours = job1 ? parseFloat(hoursMap[job1.id]) || 0 : 0;
+    const j1Hours = job1 ? evaluateHoursExpression(hoursMap[job1.id]) : 0;
     const j1Rate = job1 ? parseFloat(ratesMap[job1.id]) || job1.hourlyRate : 0;
     const j1Total = j1Hours * j1Rate;
 
-    const j2Hours = job2 ? parseFloat(hoursMap[job2.id]) || 0 : 0;
+    const j2Hours = job2 ? evaluateHoursExpression(hoursMap[job2.id]) : 0;
     const j2Rate = job2 ? parseFloat(ratesMap[job2.id]) || job2.hourlyRate : 0;
     const j2Total = j2Hours * j2Rate;
 
     const customEntries = configuredJobs.map(j => {
-      const h = parseFloat(hoursMap[j.id]) || 0;
+      const h = evaluateHoursExpression(hoursMap[j.id]);
       const r = parseFloat(ratesMap[j.id]) || j.hourlyRate;
       return {
         jobId: j.id,
@@ -335,11 +338,7 @@ export const EarningsCalculatorView: React.FC<EarningsCalculatorViewProps> = ({
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => {
-                          if (confirm(`Delete earnings record for ${row.weekStart}?`)) {
-                            onDeleteEarnings(row.id);
-                          }
-                        }}
+                        onClick={() => setRecordToDelete(row)}
                         className="p-1 text-slate-400 hover:text-rose-600 transition"
                         title="Delete earnings record"
                       >
@@ -400,7 +399,8 @@ export const EarningsCalculatorView: React.FC<EarningsCalculatorViewProps> = ({
               {/* Dynamic Job Rows */}
               <div className="space-y-2.5">
                 {configuredJobs.map(job => {
-                  const currentHours = parseFloat(hoursMap[job.id]) || 0;
+                  const currentHours = evaluateHoursExpression(hoursMap[job.id]);
+                  const isFormula = isFormulaString(hoursMap[job.id]);
                   const currentRate = parseFloat(ratesMap[job.id] !== undefined ? ratesMap[job.id] : job.hourlyRate.toString()) || 0;
                   const subtotal = currentHours * currentRate;
 
@@ -414,18 +414,25 @@ export const EarningsCalculatorView: React.FC<EarningsCalculatorViewProps> = ({
                       </div>
                       <div className="grid grid-cols-3 gap-2 items-center">
                         <div>
-                          <label className="block text-slate-500 text-[10px] uppercase font-bold mb-0.5">
-                            Hours
-                          </label>
+                          <div className="flex items-center justify-between mb-0.5">
+                            <label className="block text-slate-500 text-[10px] uppercase font-bold">
+                              Hours
+                            </label>
+                            {isFormula && (
+                              <span className="text-[10px] font-mono font-bold text-indigo-600">
+                                = {currentHours}h
+                              </span>
+                            )}
+                          </div>
                           <input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
+                            type="text"
+                            placeholder="e.g. 15 or =22.8-7.5+8.35"
                             value={hoursMap[job.id] || ''}
                             onChange={e =>
                               setHoursMap({ ...hoursMap, [job.id]: e.target.value })
                             }
-                            className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-mono outline-none"
+                            className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-mono text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                            title="Enter hours or an Excel formula like =22.8-7.5+8.35"
                           />
                         </div>
                         <div>
@@ -618,6 +625,26 @@ export const EarningsCalculatorView: React.FC<EarningsCalculatorViewProps> = ({
           </div>
         </div>
       )}
+      {/* Delete Earnings Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!recordToDelete}
+        title="Delete Earnings Record"
+        message={
+          <span>
+            Are you sure you want to delete the earnings record for{' '}
+            <strong>{recordToDelete?.weekStart} → {recordToDelete?.weekEnd}</strong> (${recordToDelete?.totalAmount.toFixed(2)})?
+          </span>
+        }
+        confirmLabel="Delete Record"
+        confirmVariant="danger"
+        onConfirm={() => {
+          if (recordToDelete) {
+            onDeleteEarnings(recordToDelete.id);
+            setRecordToDelete(null);
+          }
+        }}
+        onClose={() => setRecordToDelete(null)}
+      />
     </div>
   );
 };

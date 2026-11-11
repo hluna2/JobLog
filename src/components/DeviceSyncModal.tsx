@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { PrivacySettings, AuthorizedDevice } from '../types';
 import { exportFullBackup, importFullBackup } from '../services/storage';
+import { ConfirmModal } from './ConfirmModal';
 
 interface DeviceSyncModalProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ export const DeviceSyncModal: React.FC<DeviceSyncModalProps> = ({
   const [copiedSyncCode, setCopiedSyncCode] = useState(false);
   const [importCode, setImportCode] = useState('');
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
 
   if (!isOpen) return null;
 
@@ -215,11 +217,7 @@ export const DeviceSyncModal: React.FC<DeviceSyncModalProps> = ({
           {privacySettings.authorizedDevices.length > 1 && (
             <div className="text-right">
               <button
-                onClick={() => {
-                  if (confirm('Revoke access from all other devices? They will no longer be able to sync.')) {
-                    onRevokeAllOtherDevices();
-                  }
-                }}
+                onClick={() => setShowRevokeConfirm(true)}
                 className="text-rose-600 hover:text-rose-800 text-xs font-semibold flex items-center gap-1 ml-auto"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -285,6 +283,19 @@ export const DeviceSyncModal: React.FC<DeviceSyncModalProps> = ({
           </button>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={showRevokeConfirm}
+        title="Revoke All Other Devices"
+        message="Are you sure you want to revoke access from all other devices? They will no longer be authorized to sync your records."
+        confirmLabel="Revoke All Devices"
+        confirmVariant="danger"
+        onConfirm={() => {
+          onRevokeAllOtherDevices();
+          setShowRevokeConfirm(false);
+        }}
+        onClose={() => setShowRevokeConfirm(false)}
+      />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   JobApplication,
   JobStatus,
@@ -64,9 +64,51 @@ export const App: React.FC = () => {
   // Active view tab: 'jobs' | 'weekly' | 'earnings'
   const [activeTab, setActiveTab] = useState<'jobs' | 'weekly' | 'earnings'>('jobs');
 
-  // Currently selected job
+  // Search, Filter, and Sort State (Shared between JobTable, TranscribeAssistant, and Keyboard Navigation)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'employer' | 'status'>('date-desc');
+
+  // Filtered and Sorted Jobs (Newest applications at the top by default)
+  const filteredJobs = useMemo(() => {
+    return jobs
+      .filter(job => {
+        const matchesSearch =
+          !searchQuery ||
+          job.employerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          job.jobTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          job.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          job.notes.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          job.result.toLowerCase().includes(searchQuery.toLowerCase());
+
+        const matchesStatus = statusFilter === 'all' || job.status.toLowerCase() === statusFilter.toLowerCase();
+        const matchesSource = sourceFilter === 'all' || job.jobSource.toLowerCase() === sourceFilter.toLowerCase();
+
+        return matchesSearch && matchesStatus && matchesSource;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'date-desc') {
+          return new Date(b.dateApplied).getTime() - new Date(a.dateApplied).getTime();
+        }
+        if (sortBy === 'date-asc') {
+          return new Date(a.dateApplied).getTime() - new Date(b.dateApplied).getTime();
+        }
+        if (sortBy === 'employer') {
+          return a.employerName.localeCompare(b.employerName);
+        }
+        if (sortBy === 'status') {
+          return a.status.localeCompare(b.status);
+        }
+        return 0;
+      });
+  }, [jobs, searchQuery, statusFilter, sourceFilter, sortBy]);
+
+  // Currently selected job (defaults to #1 entry in the sorted list, e.g. Techquidation)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(() => {
-    return jobs.length > 0 ? jobs[0].id : null;
+    const initial = getJobApplications();
+    const sorted = [...initial].sort((a, b) => new Date(b.dateApplied).getTime() - new Date(a.dateApplied).getTime());
+    return sorted.length > 0 ? sorted[0].id : null;
   });
 
   // Vault / Security state
@@ -121,8 +163,8 @@ export const App: React.FC = () => {
     saveClaimantProfile(profile);
   }, [profile]);
 
-  // Selected Job Object
-  const selectedJob = jobs.find(j => j.id === selectedJobId) || jobs[0] || null;
+  // Selected Job Object from displayed list (falls back to filteredJobs[0])
+  const selectedJob = filteredJobs.find(j => j.id === selectedJobId) || filteredJobs[0] || null;
 
   // Auto-decrypt password for selected job if vault is unlocked
   useEffect(() => {
@@ -135,7 +177,7 @@ export const App: React.FC = () => {
     }
   }, [selectedJob, masterPasscode]);
 
-  // Keyboard navigation for highlighted rows (Up / Down arrows)
+  // Keyboard navigation for highlighted rows (Up / Down arrows traverse the displayed list logically)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
@@ -143,24 +185,33 @@ export const App: React.FC = () => {
       }
 
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        const currentIndex = jobs.findIndex(j => j.id === selectedJobId);
-        if (currentIndex === -1) return;
+        const currentIndex = filteredJobs.findIndex(j => j.id === selectedJobId);
+        if (currentIndex === -1) {
+          if (filteredJobs.length > 0) setSelectedJobId(filteredJobs[0].id);
+          return;
+        }
 
-        if (e.key === 'ArrowDown' && currentIndex < jobs.length - 1) {
+        if (e.key === 'ArrowDown' && currentIndex < filteredJobs.length - 1) {
           e.preventDefault();
-          setSelectedJobId(jobs[currentIndex + 1].id);
+          const targetJob = filteredJobs[currentIndex + 1];
+          setSelectedJobId(targetJob.id);
+          const elem = document.getElementById(`job-row-${targetJob.id}`);
+          if (elem) elem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else if (e.key === 'ArrowUp' && currentIndex > 0) {
           e.preventDefault();
-          setSelectedJobId(jobs[currentIndex - 1].id);
+          const targetJob = filteredJobs[currentIndex - 1];
+          setSelectedJobId(targetJob.id);
+          const elem = document.getElementById(`job-row-${targetJob.id}`);
+          if (elem) elem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [jobs, selectedJobId]);
+  }, [filteredJobs, selectedJobId]);
 
-  // Handlers for Jobs
+  // Handlers for Jobs with immediate persistent saving
   const handleSelectJob = (job: JobApplication) => {
     setSelectedJobId(job.id);
   };
@@ -176,29 +227,46 @@ export const App: React.FC = () => {
   };
 
   const handleSaveJob = (savedJob: JobApplication) => {
-    if (editingJob) {
-      setJobs(prev => prev.map(j => (j.id === savedJob.id ? savedJob : j)));
-    } else {
-      setJobs(prev => [savedJob, ...prev]);
-      setSelectedJobId(savedJob.id);
-    }
+    setJobs(prev => {
+      let updated: JobApplication[];
+      if (editingJob) {
+        updated = prev.map(j => (j.id === savedJob.id ? savedJob : j));
+      } else {
+        updated = [savedJob, ...prev];
+      }
+      saveJobApplications(updated);
+      return updated;
+    });
+    setSelectedJobId(savedJob.id);
   };
 
   const handleDeleteJob = (jobId: string) => {
-    setJobs(prev => prev.filter(j => j.id !== jobId));
+    setJobs(prev => {
+      const updated = prev.filter(j => j.id !== jobId);
+      saveJobApplications(updated);
+      return updated;
+    });
     if (selectedJobId === jobId) {
       setSelectedJobId(null);
     }
   };
 
   const handleToggleReported = (jobId: string) => {
-    setJobs(prev =>
-      prev.map(j => (j.id === jobId ? { ...j, reportedToClaimantPortal: !j.reportedToClaimantPortal } : j))
-    );
+    setJobs(prev => {
+      const updated = prev.map(j =>
+        j.id === jobId ? { ...j, reportedToClaimantPortal: !j.reportedToClaimantPortal, updatedAt: Date.now() } : j
+      );
+      saveJobApplications(updated);
+      return updated;
+    });
   };
 
   const handleStatusChange = (jobId: string, newStatus: JobStatus) => {
-    setJobs(prev => prev.map(j => (j.id === jobId ? { ...j, status: newStatus } : j)));
+    setJobs(prev => {
+      const updated = prev.map(j => (j.id === jobId ? { ...j, status: newStatus, updatedAt: Date.now() } : j));
+      saveJobApplications(updated);
+      return updated;
+    });
   };
 
   // Handlers for Confirmations & Weekly Summaries
@@ -351,9 +419,10 @@ export const App: React.FC = () => {
             {preferences.unemploymentClaimsMode && selectedJob && (
               <TranscribeAssistant
                 selectedJob={selectedJob}
-                allJobs={jobs}
+                displayedJobs={filteredJobs}
                 onSelectJob={handleSelectJob}
                 onToggleReported={handleToggleReported}
+                onStatusChange={handleStatusChange}
                 selectedState={preferences.selectedState}
                 decryptedPassword={decryptedPassword}
                 onUnlockVaultRequest={() => setIsVaultModalOpen(true)}
@@ -362,6 +431,15 @@ export const App: React.FC = () => {
 
             <JobTable
               jobs={jobs}
+              filteredJobs={filteredJobs}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              sourceFilter={sourceFilter}
+              setSourceFilter={setSourceFilter}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
               selectedJobId={selectedJobId}
               unemploymentClaimsMode={preferences.unemploymentClaimsMode}
               onSelectJob={handleSelectJob}

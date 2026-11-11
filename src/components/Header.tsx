@@ -262,16 +262,13 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex space-x-1 border-t border-slate-100 overflow-x-auto">
         <button
           onClick={() => setActiveTab('jobs')}
-          className={`py-2 px-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition whitespace-nowrap ${
+          className={`py-2 px-3.5 text-xs font-semibold border-b-2 flex items-center gap-2 transition whitespace-nowrap ${
             activeTab === 'jobs'
               ? 'border-indigo-600 text-indigo-700'
               : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
           }`}
         >
           <span>Job Applications</span>
-          <span className="bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded-full text-[10px] font-bold">
-            {totalJobs}
-          </span>
         </button>
 
         {preferences.unemploymentClaimsMode && (

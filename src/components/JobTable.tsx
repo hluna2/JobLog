@@ -17,9 +17,19 @@ import {
 } from 'lucide-react';
 import { JobApplication, JobStatus } from '../types';
 import { formatDaysAgo, calculateDaysAgoNumber } from '../utils/date';
+import { ConfirmModal } from './ConfirmModal';
 
 interface JobTableProps {
   jobs: JobApplication[];
+  filteredJobs: JobApplication[];
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
+  statusFilter: string;
+  setStatusFilter: (s: string) => void;
+  sourceFilter: string;
+  setSourceFilter: (s: string) => void;
+  sortBy: 'date-desc' | 'date-asc' | 'employer' | 'status';
+  setSortBy: (s: 'date-desc' | 'date-asc' | 'employer' | 'status') => void;
   selectedJobId: string | null;
   unemploymentClaimsMode: boolean;
   onSelectJob: (job: JobApplication) => void;
@@ -31,6 +41,15 @@ interface JobTableProps {
 
 export const JobTable: React.FC<JobTableProps> = ({
   jobs,
+  filteredJobs,
+  searchQuery,
+  setSearchQuery,
+  statusFilter,
+  setStatusFilter,
+  sourceFilter,
+  setSourceFilter,
+  sortBy,
+  setSortBy,
   selectedJobId,
   unemploymentClaimsMode,
   onSelectJob,
@@ -39,11 +58,8 @@ export const JobTable: React.FC<JobTableProps> = ({
   onToggleReported,
   onStatusChange,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sourceFilter, setSourceFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'employer' | 'status'>('date-desc');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [jobToDelete, setJobToDelete] = useState<JobApplication | null>(null);
 
   const handleCopy = (e: React.MouseEvent, key: string, value: string) => {
     e.stopPropagation();
@@ -60,39 +76,6 @@ export const JobTable: React.FC<JobTableProps> = ({
     });
     return Array.from(set).sort();
   }, [jobs]);
-
-  const filteredJobs = useMemo(() => {
-    return jobs
-      .filter(job => {
-        const matchesSearch =
-          !searchQuery ||
-          job.employerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          job.jobTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          job.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          job.notes.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          job.result.toLowerCase().includes(searchQuery.toLowerCase());
-
-        const matchesStatus = statusFilter === 'all' || job.status.toLowerCase() === statusFilter.toLowerCase();
-        const matchesSource = sourceFilter === 'all' || job.jobSource.toLowerCase() === sourceFilter.toLowerCase();
-
-        return matchesSearch && matchesStatus && matchesSource;
-      })
-      .sort((a, b) => {
-        if (sortBy === 'date-desc') {
-          return new Date(b.dateApplied).getTime() - new Date(a.dateApplied).getTime();
-        }
-        if (sortBy === 'date-asc') {
-          return new Date(a.dateApplied).getTime() - new Date(b.dateApplied).getTime();
-        }
-        if (sortBy === 'employer') {
-          return a.employerName.localeCompare(b.employerName);
-        }
-        if (sortBy === 'status') {
-          return a.status.localeCompare(b.status);
-        }
-        return 0;
-      });
-  }, [jobs, searchQuery, statusFilter, sourceFilter, sortBy]);
 
   const getStatusBadge = (status: JobStatus) => {
     switch (status) {
@@ -236,6 +219,7 @@ export const JobTable: React.FC<JobTableProps> = ({
                   return (
                     <tr
                       key={job.id}
+                      id={`job-row-${job.id}`}
                       onClick={() => onSelectJob(job)}
                       className={`cursor-pointer transition-colors ${rowClass}`}
                     >
@@ -429,11 +413,7 @@ export const JobTable: React.FC<JobTableProps> = ({
                           </button>
 
                           <button
-                            onClick={() => {
-                              if (confirm(`Delete application for ${job.employerName}?`)) {
-                                onDeleteJob(job.id);
-                              }
-                            }}
+                            onClick={() => setJobToDelete(job)}
                             className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
                             title="Delete"
                           >
@@ -449,6 +429,27 @@ export const JobTable: React.FC<JobTableProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Custom Accessible Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!jobToDelete}
+        title="Delete Job Application"
+        message={
+          <span>
+            Are you sure you want to delete the application for{' '}
+            <strong>{jobToDelete?.employerName}</strong> ({jobToDelete?.jobTitle})? This cannot be undone.
+          </span>
+        }
+        confirmLabel="Delete Application"
+        confirmVariant="danger"
+        onConfirm={() => {
+          if (jobToDelete) {
+            onDeleteJob(jobToDelete.id);
+            setJobToDelete(null);
+          }
+        }}
+        onClose={() => setJobToDelete(null)}
+      />
     </div>
   );
 };

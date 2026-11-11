@@ -19,14 +19,15 @@ import {
   EyeOff,
   Send
 } from 'lucide-react';
-import { JobApplication } from '../types';
+import { JobApplication, JobStatus } from '../types';
 import { formatDaysAgo } from '../utils/date';
 
 interface TranscribeAssistantProps {
   selectedJob: JobApplication | null;
-  allJobs: JobApplication[];
+  displayedJobs: JobApplication[];
   onSelectJob: (job: JobApplication) => void;
   onToggleReported: (jobId: string) => void;
+  onStatusChange?: (jobId: string, newStatus: JobStatus) => void;
   selectedState: string;
   decryptedPassword?: string;
   onUnlockVaultRequest?: () => void;
@@ -34,9 +35,10 @@ interface TranscribeAssistantProps {
 
 export const TranscribeAssistant: React.FC<TranscribeAssistantProps> = ({
   selectedJob,
-  allJobs,
+  displayedJobs,
   onSelectJob,
   onToggleReported,
+  onStatusChange,
   selectedState,
   decryptedPassword,
   onUnlockVaultRequest,
@@ -56,16 +58,16 @@ export const TranscribeAssistant: React.FC<TranscribeAssistantProps> = ({
     );
   }
 
-  const currentIndex = allJobs.findIndex(j => j.id === selectedJob.id);
+  const currentIndex = displayedJobs.findIndex(j => j.id === selectedJob.id);
   const hasPrev = currentIndex > 0;
-  const hasNext = currentIndex < allJobs.length - 1;
+  const hasNext = currentIndex !== -1 && currentIndex < displayedJobs.length - 1;
 
   const handlePrev = () => {
-    if (hasPrev) onSelectJob(allJobs[currentIndex - 1]);
+    if (hasPrev) onSelectJob(displayedJobs[currentIndex - 1]);
   };
 
   const handleNext = () => {
-    if (hasNext) onSelectJob(allJobs[currentIndex + 1]);
+    if (hasNext) onSelectJob(displayedJobs[currentIndex + 1]);
   };
 
   const handleCopy = (fieldName: string, text: string) => {
@@ -154,10 +156,26 @@ export const TranscribeAssistant: React.FC<TranscribeAssistantProps> = ({
     },
   ];
 
+  const getStatusBadgeColor = (status: JobStatus) => {
+    switch (status) {
+      case 'Offer':
+        return 'text-emerald-800 bg-emerald-50 border-emerald-300';
+      case 'Interview':
+        return 'text-amber-800 bg-amber-50 border-amber-300';
+      case 'Denied':
+        return 'text-rose-800 bg-rose-50 border-rose-300';
+      case 'Applied':
+        return 'text-sky-800 bg-sky-50 border-sky-300';
+      case 'Saved':
+      default:
+        return 'text-slate-700 bg-slate-100 border-slate-300';
+    }
+  };
+
   return (
-    <div className="bg-white rounded-xl border border-indigo-300 shadow-xs p-4 mb-5 transition-all no-print">
+    <div className="bg-white rounded-xl border border-indigo-200 shadow-2xs p-4 mb-5 transition-all no-print">
       {/* Top Header of the Selection Box */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 flex-shrink-0">
             <ClipboardList className="w-4 h-4 text-indigo-600" />
@@ -165,7 +183,7 @@ export const TranscribeAssistant: React.FC<TranscribeAssistantProps> = ({
           <div>
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <span className="font-semibold text-indigo-700">
-                Active Selection #{currentIndex + 1} of {allJobs.length}
+                Active Selection #{currentIndex !== -1 ? currentIndex + 1 : 1} of {displayedJobs.length}
               </span>
               <span>•</span>
               <span className="font-mono text-slate-600">{daysAgoText}</span>
@@ -178,8 +196,28 @@ export const TranscribeAssistant: React.FC<TranscribeAssistantProps> = ({
           </div>
         </div>
 
-        {/* Navigation & Mark Reported */}
-        <div className="flex items-center gap-2">
+        {/* Quick Status Selector, Mark Reported & Navigation */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Status Dropdown */}
+          {onStatusChange && (
+            <div className="flex items-center gap-1">
+              <select
+                value={selectedJob.status}
+                onChange={e => onStatusChange(selectedJob.id, e.target.value as JobStatus)}
+                className={`text-xs px-2.5 py-1 rounded-lg border font-bold cursor-pointer focus:outline-none transition ${getStatusBadgeColor(
+                  selectedJob.status
+                )}`}
+                title="Change status - saves immediately to local storage"
+              >
+                <option value="Applied">Applied (Blue)</option>
+                <option value="Interview">Interview (Yellow)</option>
+                <option value="Offer">Offer (Green)</option>
+                <option value="Denied">Denied (Red)</option>
+                <option value="Saved">Saved</option>
+              </select>
+            </div>
+          )}
+
           <button
             onClick={() => onToggleReported(selectedJob.id)}
             className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition flex items-center gap-1.5 ${
@@ -210,7 +248,7 @@ export const TranscribeAssistant: React.FC<TranscribeAssistantProps> = ({
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
             <span className="text-[11px] font-medium text-slate-600 px-2 border-x border-slate-200 font-mono">
-              {currentIndex + 1}/{allJobs.length}
+              {currentIndex !== -1 ? currentIndex + 1 : 1}/{displayedJobs.length}
             </span>
             <button
               onClick={handleNext}

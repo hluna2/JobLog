@@ -8,13 +8,15 @@ import {
   Edit2,
   ExternalLink,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  AlertCircle
 } from 'lucide-react';
 import {
   JobApplication,
   WeeklySummaryLog,
   WeeklyConfirmationRecord
 } from '../types';
+import { ConfirmModal } from './ConfirmModal';
 
 interface WeeklyComplianceViewProps {
   jobs: JobApplication[];
@@ -60,6 +62,29 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
   const [actNet, setActNet] = useState('0');
   const [actFollowups, setActFollowups] = useState('0');
   const [actNotes, setActNotes] = useState('');
+
+  // Delete Confirmation Modal States
+  const [confToDelete, setConfToDelete] = useState<WeeklyConfirmationRecord | null>(null);
+  const [actToDelete, setActToDelete] = useState<WeeklySummaryLog | null>(null);
+  const [showCleanEmptyModal, setShowCleanEmptyModal] = useState(false);
+
+  // Count empty/placeholder rows
+  const emptyRows = weeklySummaries.filter(
+    w =>
+      !w.weekStart ||
+      (!w.notes &&
+        (w.applicationsSent || 0) +
+          (w.interviews || 0) +
+          (w.networkingContacts || 0) +
+          (w.followupsDone || 0) ===
+          0)
+  );
+  const emptyRowsCount = emptyRows.length;
+
+  const handleCleanEmptyRows = () => {
+    emptyRows.forEach(w => onDeleteWeeklySummary(w.id));
+    setShowCleanEmptyModal(false);
+  };
 
   // Show all vs show last 5 state
   const [showAllConfirmations, setShowAllConfirmations] = useState(false);
@@ -377,11 +402,7 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => {
-                          if (confirm(`Delete confirmation for week ${conf.weekEnding}?`)) {
-                            onDeleteConfirmation(conf.id);
-                          }
-                        }}
+                        onClick={() => setConfToDelete(conf)}
                         className="p-1 text-slate-400 hover:text-rose-600 transition"
                         title="Delete confirmation record"
                       >
@@ -428,6 +449,17 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
               </button>
             )}
 
+            {emptyRowsCount > 0 && (
+              <button
+                onClick={() => setShowCleanEmptyModal(true)}
+                className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-lg border border-rose-200 flex items-center gap-1 transition"
+                title="Remove empty placeholder weeks"
+              >
+                <Trash2 className="w-3 h-3 text-rose-600" />
+                <span>Remove {emptyRowsCount} Blank {emptyRowsCount === 1 ? 'Week' : 'Weeks'}</span>
+              </button>
+            )}
+
             <button
               onClick={handleOpenAddActivity}
               className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg border border-slate-200 flex items-center gap-1 transition"
@@ -450,10 +482,11 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
               <tr className="text-slate-600 font-semibold border-b border-slate-200">
                 <th className="py-2 px-3 w-8 text-center">#</th>
                 <th className="py-2 px-3">Week Start</th>
-                <th className="py-2 px-3 text-center">Applications</th>
+                <th className="py-2 px-3 text-center">Apps</th>
                 <th className="py-2 px-3 text-center">Interviews</th>
                 <th className="py-2 px-3 text-center">Networking</th>
                 <th className="py-2 px-3 text-center">Follow-ups</th>
+                <th className="py-2 px-3 text-center">Total Activities</th>
                 <th className="py-2 px-3">Weekly Notes</th>
                 <th className="py-2 px-3 text-right">Actions</th>
               </tr>
@@ -461,40 +494,62 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
             <tbody className="divide-y divide-slate-100">
               {displayedWeekly.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-6 text-center text-slate-400">
+                  <td colSpan={9} className="py-6 text-center text-slate-400">
                     No weekly activity logs saved yet.
                   </td>
                 </tr>
               ) : (
                 displayedWeekly.map((ws, idx) => {
-                  const isMet = ws.applicationsSent >= 3;
+                  const apps = ws.applicationsSent || 0;
+                  const interviews = ws.interviews || 0;
+                  const networking = ws.networkingContacts || 0;
+                  const followups = ws.followupsDone || 0;
+                  const totalActivities = apps + interviews + networking + followups;
+                  const isMet = totalActivities >= 3;
+                  const isBlank = !ws.weekStart || (totalActivities === 0 && !ws.notes);
+
                   return (
-                    <tr key={ws.id} className="hover:bg-slate-50 transition">
+                    <tr
+                      key={ws.id}
+                      className={`hover:bg-slate-50 transition ${
+                        isBlank ? 'bg-amber-50/30' : ''
+                      }`}
+                    >
                       <td className="py-2 px-3 text-center text-slate-400 font-mono text-[11px]">
                         {idx + 1}
                       </td>
                       <td className="py-2 px-3 font-mono font-medium text-slate-800 whitespace-nowrap">
-                        {ws.weekStart}
+                        {ws.weekStart ? (
+                          ws.weekStart
+                        ) : (
+                          <span className="text-amber-700 italic font-sans text-[11px]">
+                            (Blank / Unspecified Week)
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-center font-mono font-semibold text-slate-700">
+                        {apps}
+                      </td>
+                      <td className="py-2 px-3 text-center font-mono text-slate-700">
+                        {interviews}
+                      </td>
+                      <td className="py-2 px-3 text-center font-mono text-slate-600">
+                        {networking}
+                      </td>
+                      <td className="py-2 px-3 text-center font-mono text-slate-600">
+                        {followups}
                       </td>
                       <td className="py-2 px-3 text-center whitespace-nowrap">
                         <span
                           className={`inline-block px-2 py-0.5 rounded font-bold text-xs ${
                             isMet
-                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                              : 'bg-amber-50 text-amber-800 border border-amber-200'
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                              : 'bg-amber-50 text-amber-800 border border-amber-300'
                           }`}
+                          title={`Total: ${totalActivities} activities (${apps} apps, ${interviews} interviews, ${networking} networking, ${followups} follow-ups)`}
                         >
-                          {ws.applicationsSent} {isMet ? '✓' : ''}
+                          {totalActivities} / 3 min {isMet ? '✓' : ''}
                         </span>
-                      </td>
-                      <td className="py-2 px-3 text-center font-bold text-slate-700">
-                        {ws.interviews || 0}
-                      </td>
-                      <td className="py-2 px-3 text-center text-slate-600">
-                        {ws.networkingContacts || 0}
-                      </td>
-                      <td className="py-2 px-3 text-center text-slate-600">
-                        {ws.followupsDone || 0}
                       </td>
                       <td className="py-2 px-3 text-slate-600 max-w-xs">
                         {ws.notes || <span className="text-slate-300 italic">—</span>}
@@ -508,11 +563,7 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm(`Delete activity log for week ${ws.weekStart}?`)) {
-                              onDeleteWeeklySummary(ws.id);
-                            }
-                          }}
+                          onClick={() => setActToDelete(ws)}
                           className="p-1 text-slate-400 hover:text-rose-600 transition"
                           title="Delete activity log"
                         >
@@ -752,6 +803,67 @@ export const WeeklyComplianceView: React.FC<WeeklyComplianceViewProps> = ({
           </div>
         </div>
       )}
+      {/* Confirmation Deletion Modal */}
+      <ConfirmModal
+        isOpen={!!confToDelete}
+        title="Delete Confirmation Record"
+        message={
+          <span>
+            Are you sure you want to delete the confirmation record for week ending{' '}
+            <strong>{confToDelete?.weekEnding}</strong> (Conf #{confToDelete?.confirmationNumber})?
+          </span>
+        }
+        confirmLabel="Delete Confirmation"
+        confirmVariant="danger"
+        onConfirm={() => {
+          if (confToDelete) {
+            onDeleteConfirmation(confToDelete.id);
+            setConfToDelete(null);
+          }
+        }}
+        onClose={() => setConfToDelete(null)}
+      />
+
+      {/* Activity Log Deletion Modal */}
+      <ConfirmModal
+        isOpen={!!actToDelete}
+        title="Delete Weekly Activity Log"
+        message={
+          <span>
+            Are you sure you want to delete the activity log for week starting{' '}
+            <strong>{actToDelete?.weekStart || 'Unspecified'}</strong>?
+          </span>
+        }
+        confirmLabel="Delete Log"
+        confirmVariant="danger"
+        onConfirm={() => {
+          if (actToDelete) {
+            onDeleteWeeklySummary(actToDelete.id);
+            setActToDelete(null);
+          }
+        }}
+        onClose={() => setActToDelete(null)}
+      />
+
+      {/* Clean Up All Empty Placeholder Rows Modal */}
+      <ConfirmModal
+        isOpen={showCleanEmptyModal}
+        title="Remove All Blank Placeholder Weeks"
+        message={
+          <span>
+            Are you sure you want to delete <strong>{emptyRowsCount} blank/empty placeholder weeks</strong> from your log?
+            <br />
+            <br />
+            <span className="text-slate-500">
+              Only weeks that have 0 applications, 0 interviews, 0 networking contacts, 0 follow-ups, and no notes will be removed. All valid entries remain untouched.
+            </span>
+          </span>
+        }
+        confirmLabel={`Delete ${emptyRowsCount} Blank ${emptyRowsCount === 1 ? 'Week' : 'Weeks'}`}
+        confirmVariant="danger"
+        onConfirm={handleCleanEmptyRows}
+        onClose={() => setShowCleanEmptyModal(false)}
+      />
     </div>
   );
 };
