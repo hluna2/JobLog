@@ -72,8 +72,9 @@
 
 ### Quick Start
 ```bash
-# Navigate to project folder
-cd "C:\Users\Public\Desktop\Work\JobLog"
+# Clone the repository
+git clone https://github.com/hluna2/JobLog.git
+cd JobLog
 
 # Install dependencies
 npm install
@@ -82,45 +83,26 @@ npm install
 npm run dev
 ```
 
-Open your browser to `http://localhost:5175` to start using the app.
+Open your browser to `http://localhost:5173` (or the port indicated in your terminal) to start using the app.
 
 ---
 
-## 🌐 Live Deployment & Cloud Hosting
+## 🌐 Live Deployment & Hosting
 
-### Deployed on Vercel
-The live production application is hosted at:  
+### Hosted on Vercel
+The production web application is live at:  
 👉 **[https://job-log-ten.vercel.app/](https://job-log-ten.vercel.app/)**
 
-Every update pushed to the `main` branch of this repository automatically builds and redeploys in real-time.
+### Continuous Delivery (CI/CD)
+- **Automatic Builds**: Every update pushed to the `main` branch of this repository automatically builds and redeploys to production with zero downtime.
+- **Client-Side Privacy**: Because JobLog is engineered 100% client-side with native browser `localStorage`, no personal application data, earnings records, or credentials are ever sent to or stored on Vercel's servers.
 
-### Deploy Your Own Copy (Free 1-Click)
+### Deploy Your Own Instance (1-Click)
 1. Fork or clone this repository to your GitHub account.
 2. Sign in to [vercel.com](https://vercel.com) and click **"Add New Project"**.
-3. Import your GitHub repository (`JobLog`).
+3. Import your `JobLog` repository.
 4. Framework Preset will auto-detect as **Vite**. Click **Deploy**!
-5. Your own live URL will be ready in under 45 seconds with automatic SSL and zero server maintenance.
-
-### Option B: Netlify (Drag and Drop - No Git Required)
-1. In this directory, run:
-   ```bash
-   npm run build
-   ```
-2. This creates a production-ready `dist` folder.
-3. Go to [app.netlify.com/drop](https://app.netlify.com/drop).
-4. Drag and drop the `dist` folder directly onto the browser window.
-5. Your app is immediately live on the web!
-
-### Option C: GitHub Pages
-1. Install `gh-pages`:
-   ```bash
-   npm install -D gh-pages
-   ```
-2. Add `"deploy": "gh-pages -d dist"` to `scripts` in `package.json`.
-3. Run:
-   ```bash
-   npm run build && npm run deploy
-   ```
+5. Your live URL will be ready in under 45 seconds with automatic SSL and zero server maintenance.
 
 ---
 
