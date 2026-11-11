@@ -39,6 +39,7 @@ import { decryptSecret } from './utils/crypto';
 // Components
 import { Header } from './components/Header';
 import { PrivacyBanner } from './components/PrivacyBanner';
+import { GeneralSummary } from './components/GeneralSummary';
 import { JobTable } from './components/JobTable';
 import { TranscribeAssistant } from './components/TranscribeAssistant';
 import { JobModal } from './components/JobModal';
@@ -50,7 +51,7 @@ import { VaultModal } from './components/VaultModal';
 import { PrivacySettingsModal } from './components/PrivacySettingsModal';
 
 export const App: React.FC = () => {
-  // Preferences: Unemployment Claims Mode & State
+  // Preferences: Claims Mode & State
   const [preferences, setPreferences] = useState<AppPreferences>(() => getAppPreferences());
   const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(() => getPrivacySettings());
   const [jobs, setJobs] = useState<JobApplication[]>(() => getJobApplications());
@@ -63,7 +64,7 @@ export const App: React.FC = () => {
   // Active view tab: 'jobs' | 'weekly' | 'earnings'
   const [activeTab, setActiveTab] = useState<'jobs' | 'weekly' | 'earnings'>('jobs');
 
-  // Currently selected job (for row highlighting and Claimant Portal Transcribe Assistant)
+  // Currently selected job
   const [selectedJobId, setSelectedJobId] = useState<string | null>(() => {
     return jobs.length > 0 ? jobs[0].id : null;
   });
@@ -159,12 +160,6 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [jobs, selectedJobId]);
 
-  // Metrics computation
-  const totalJobs = jobs.length;
-  const totalOffers = jobs.filter(j => j.status === 'Offer').length;
-  const totalInterviews = jobs.filter(j => j.status === 'Interview').length;
-  const totalDenied = jobs.filter(j => j.status === 'Denied').length;
-
   // Handlers for Jobs
   const handleSelectJob = (job: JobApplication) => {
     setSelectedJobId(job.id);
@@ -206,9 +201,9 @@ export const App: React.FC = () => {
     setJobs(prev => prev.map(j => (j.id === jobId ? { ...j, status: newStatus } : j)));
   };
 
-  // Handlers for Confirmations & Earnings
+  // Handlers for Confirmations & Weekly Summaries
   const handleAddConfirmation = (record: WeeklyConfirmationRecord) => {
-    setConfirmations(prev => [record, ...prev]);
+    setConfirmations(prev => [...prev, record]);
   };
 
   const handleUpdateConfirmation = (record: WeeklyConfirmationRecord) => {
@@ -219,8 +214,25 @@ export const App: React.FC = () => {
     setConfirmations(prev => prev.filter(c => c.id !== id));
   };
 
+  const handleAddWeeklySummary = (summary: WeeklySummaryLog) => {
+    setWeeklySummaries(prev => [...prev, summary]);
+  };
+
+  const handleUpdateWeeklySummary = (summary: WeeklySummaryLog) => {
+    setWeeklySummaries(prev => prev.map(w => (w.id === summary.id ? summary : w)));
+  };
+
+  const handleDeleteWeeklySummary = (id: string) => {
+    setWeeklySummaries(prev => prev.filter(w => w.id !== id));
+  };
+
+  // Handlers for Earnings
   const handleAddEarnings = (record: PartTimeEarningsRecord) => {
-    setEarnings(prev => [record, ...prev]);
+    setEarnings(prev => [...prev, record]);
+  };
+
+  const handleUpdateEarnings = (record: PartTimeEarningsRecord) => {
+    setEarnings(prev => prev.map(e => (e.id === record.id ? record : e)));
   };
 
   const handleDeleteEarnings = (id: string) => {
@@ -307,10 +319,10 @@ export const App: React.FC = () => {
         onOpenVault={() => setIsVaultModalOpen(true)}
         isVaultUnlocked={isVaultUnlocked}
         hasMasterPasscode={hasMasterPasscode}
-        totalJobs={totalJobs}
-        totalInterviews={totalInterviews}
-        totalOffers={totalOffers}
-        totalDenied={totalDenied}
+        totalJobs={jobs.length}
+        totalInterviews={jobs.filter(j => j.status === 'Interview').length}
+        totalOffers={jobs.filter(j => j.status === 'Offer').length}
+        totalDenied={jobs.filter(j => j.status === 'Denied').length}
         onExportCsv={handleExportCsv}
         onExportJson={handleExportJson}
         onImportClick={() => fileInputRef.current?.click()}
@@ -332,6 +344,9 @@ export const App: React.FC = () => {
         {/* Job Applications View */}
         {activeTab === 'jobs' && (
           <div className="space-y-4">
+            {/* General Search Summary Dashboard */}
+            <GeneralSummary jobs={jobs} />
+
             {/* Active Selection Box: ONLY shown if Unemployment Claims Mode is ON! */}
             {preferences.unemploymentClaimsMode && selectedJob && (
               <TranscribeAssistant
@@ -368,6 +383,9 @@ export const App: React.FC = () => {
             onAddConfirmation={handleAddConfirmation}
             onUpdateConfirmation={handleUpdateConfirmation}
             onDeleteConfirmation={handleDeleteConfirmation}
+            onAddWeeklySummary={handleAddWeeklySummary}
+            onUpdateWeeklySummary={handleUpdateWeeklySummary}
+            onDeleteWeeklySummary={handleDeleteWeeklySummary}
           />
         )}
 
@@ -378,6 +396,7 @@ export const App: React.FC = () => {
             configuredJobs={configuredJobs}
             onSaveConfiguredJobs={handleSaveConfiguredJobs}
             onAddEarnings={handleAddEarnings}
+            onUpdateEarnings={handleUpdateEarnings}
             onDeleteEarnings={handleDeleteEarnings}
           />
         )}
@@ -388,7 +407,7 @@ export const App: React.FC = () => {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <span className="font-medium text-slate-700">JobLog • Job Application Tracker</span>
           <span className="text-[11px] text-slate-400">
-            Local device storage • Zero data sharing
+            Local device storage • 100% private to this device
           </span>
         </div>
       </footer>
@@ -406,9 +425,7 @@ export const App: React.FC = () => {
         isOpen={isPrintModalOpen}
         onClose={() => setIsPrintModalOpen(false)}
         jobs={jobs}
-        profile={profile}
         selectedState={preferences.selectedState}
-        onUpdateProfile={setProfile}
       />
 
       <DeviceSyncModal
@@ -444,7 +461,7 @@ export const App: React.FC = () => {
         onClose={() => setIsPrivacyModalOpen(false)}
         settings={privacySettings}
         onUpdateSettings={setPrivacySettings}
-        totalJobs={totalJobs}
+        totalJobs={jobs.length}
         onClearAllData={() => {
           clearAllLocalData();
           window.location.reload();
