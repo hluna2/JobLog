@@ -1,0 +1,458 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  JobApplication,
+  JobStatus,
+  WeeklySummaryLog,
+  WeeklyConfirmationRecord,
+  PartTimeEarningsRecord,
+  PrivacySettings,
+  ClaimantProfile,
+  ConfiguredJob,
+  AppPreferences
+} from './types';
+import {
+  getAppPreferences,
+  saveAppPreferences,
+  getPrivacySettings,
+  savePrivacySettings,
+  getJobApplications,
+  saveJobApplications,
+  getWeeklySummaries,
+  saveWeeklySummaries,
+  getWeeklyConfirmations,
+  saveWeeklyConfirmations,
+  getPartTimeEarnings,
+  savePartTimeEarnings,
+  getConfiguredJobs,
+  saveConfiguredJobs,
+  getClaimantProfile,
+  saveClaimantProfile,
+  authorizeDevice,
+  revokeAllOtherDevices,
+  exportFullBackup,
+  importFullBackup,
+  clearAllLocalData
+} from './services/storage';
+import { exportJobsToCSV, downloadFile } from './utils/csv';
+import { decryptSecret } from './utils/crypto';
+
+// Components
+import { Header } from './components/Header';
+import { PrivacyBanner } from './components/PrivacyBanner';
+import { JobTable } from './components/JobTable';
+import { TranscribeAssistant } from './components/TranscribeAssistant';
+import { JobModal } from './components/JobModal';
+import { WeeklyComplianceView } from './components/WeeklyComplianceView';
+import { EarningsCalculatorView } from './components/EarningsCalculatorView';
+import { PrintableLogModal } from './components/PrintableLogModal';
+import { DeviceSyncModal } from './components/DeviceSyncModal';
+import { VaultModal } from './components/VaultModal';
+import { PrivacySettingsModal } from './components/PrivacySettingsModal';
+
+export const App: React.FC = () => {
+  // Preferences: Unemployment Claims Mode & State
+  const [preferences, setPreferences] = useState<AppPreferences>(() => getAppPreferences());
+  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(() => getPrivacySettings());
+  const [jobs, setJobs] = useState<JobApplication[]>(() => getJobApplications());
+  const [weeklySummaries, setWeeklySummaries] = useState<WeeklySummaryLog[]>(() => getWeeklySummaries());
+  const [confirmations, setConfirmations] = useState<WeeklyConfirmationRecord[]>(() => getWeeklyConfirmations());
+  const [earnings, setEarnings] = useState<PartTimeEarningsRecord[]>(() => getPartTimeEarnings());
+  const [configuredJobs, setConfiguredJobs] = useState<ConfiguredJob[]>(() => getConfiguredJobs());
+  const [profile, setProfile] = useState<ClaimantProfile>(() => getClaimantProfile());
+
+  // Active view tab: 'jobs' | 'weekly' | 'earnings'
+  const [activeTab, setActiveTab] = useState<'jobs' | 'weekly' | 'earnings'>('jobs');
+
+  // Currently selected job (for row highlighting and Claimant Portal Transcribe Assistant)
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(() => {
+    return jobs.length > 0 ? jobs[0].id : null;
+  });
+
+  // Vault / Security state
+  const [masterPasscode, setMasterPasscode] = useState<string | null>(null);
+  const [hasMasterPasscode, setHasMasterPasscode] = useState<boolean>(() => {
+    return !!localStorage.getItem('joblog_vault_check_v1');
+  });
+  const [isVaultUnlocked, setIsVaultUnlocked] = useState<boolean>(false);
+  const [decryptedPassword, setDecryptedPassword] = useState<string | undefined>(undefined);
+
+  // Modals state
+  const [isJobModalOpen, setIsJobModalOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<JobApplication | null>(null);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+  const [isDeviceSyncModalOpen, setIsDeviceSyncModalOpen] = useState(false);
+  const [isVaultModalOpen, setIsVaultModalOpen] = useState(false);
+
+  // File input ref for backup import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Synchronize state changes to localStorage
+  useEffect(() => {
+    saveAppPreferences(preferences);
+  }, [preferences]);
+
+  useEffect(() => {
+    savePrivacySettings(privacySettings);
+  }, [privacySettings]);
+
+  useEffect(() => {
+    saveJobApplications(jobs);
+  }, [jobs]);
+
+  useEffect(() => {
+    saveWeeklySummaries(weeklySummaries);
+  }, [weeklySummaries]);
+
+  useEffect(() => {
+    saveWeeklyConfirmations(confirmations);
+  }, [confirmations]);
+
+  useEffect(() => {
+    savePartTimeEarnings(earnings);
+  }, [earnings]);
+
+  useEffect(() => {
+    saveConfiguredJobs(configuredJobs);
+  }, [configuredJobs]);
+
+  useEffect(() => {
+    saveClaimantProfile(profile);
+  }, [profile]);
+
+  // Selected Job Object
+  const selectedJob = jobs.find(j => j.id === selectedJobId) || jobs[0] || null;
+
+  // Auto-decrypt password for selected job if vault is unlocked
+  useEffect(() => {
+    if (selectedJob?.portalCredentials?.encryptedPassword && masterPasscode) {
+      decryptSecret(selectedJob.portalCredentials.encryptedPassword, masterPasscode)
+        .then(pwd => setDecryptedPassword(pwd))
+        .catch(() => setDecryptedPassword(undefined));
+    } else {
+      setDecryptedPassword(undefined);
+    }
+  }, [selectedJob, masterPasscode]);
+
+  // Keyboard navigation for highlighted rows (Up / Down arrows)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
+        return;
+      }
+
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const currentIndex = jobs.findIndex(j => j.id === selectedJobId);
+        if (currentIndex === -1) return;
+
+        if (e.key === 'ArrowDown' && currentIndex < jobs.length - 1) {
+          e.preventDefault();
+          setSelectedJobId(jobs[currentIndex + 1].id);
+        } else if (e.key === 'ArrowUp' && currentIndex > 0) {
+          e.preventDefault();
+          setSelectedJobId(jobs[currentIndex - 1].id);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [jobs, selectedJobId]);
+
+  // Metrics computation
+  const totalJobs = jobs.length;
+  const totalOffers = jobs.filter(j => j.status === 'Offer').length;
+  const totalInterviews = jobs.filter(j => j.status === 'Interview').length;
+  const totalDenied = jobs.filter(j => j.status === 'Denied').length;
+
+  // Handlers for Jobs
+  const handleSelectJob = (job: JobApplication) => {
+    setSelectedJobId(job.id);
+  };
+
+  const handleOpenNewJob = () => {
+    setEditingJob(null);
+    setIsJobModalOpen(true);
+  };
+
+  const handleEditJob = (job: JobApplication) => {
+    setEditingJob(job);
+    setIsJobModalOpen(true);
+  };
+
+  const handleSaveJob = (savedJob: JobApplication) => {
+    if (editingJob) {
+      setJobs(prev => prev.map(j => (j.id === savedJob.id ? savedJob : j)));
+    } else {
+      setJobs(prev => [savedJob, ...prev]);
+      setSelectedJobId(savedJob.id);
+    }
+  };
+
+  const handleDeleteJob = (jobId: string) => {
+    setJobs(prev => prev.filter(j => j.id !== jobId));
+    if (selectedJobId === jobId) {
+      setSelectedJobId(null);
+    }
+  };
+
+  const handleToggleReported = (jobId: string) => {
+    setJobs(prev =>
+      prev.map(j => (j.id === jobId ? { ...j, reportedToClaimantPortal: !j.reportedToClaimantPortal } : j))
+    );
+  };
+
+  const handleStatusChange = (jobId: string, newStatus: JobStatus) => {
+    setJobs(prev => prev.map(j => (j.id === jobId ? { ...j, status: newStatus } : j)));
+  };
+
+  // Handlers for Confirmations & Earnings
+  const handleAddConfirmation = (record: WeeklyConfirmationRecord) => {
+    setConfirmations(prev => [record, ...prev]);
+  };
+
+  const handleUpdateConfirmation = (record: WeeklyConfirmationRecord) => {
+    setConfirmations(prev => prev.map(c => (c.id === record.id ? record : c)));
+  };
+
+  const handleDeleteConfirmation = (id: string) => {
+    setConfirmations(prev => prev.filter(c => c.id !== id));
+  };
+
+  const handleAddEarnings = (record: PartTimeEarningsRecord) => {
+    setEarnings(prev => [record, ...prev]);
+  };
+
+  const handleDeleteEarnings = (id: string) => {
+    setEarnings(prev => prev.filter(e => e.id !== id));
+  };
+
+  const handleSaveConfiguredJobs = (newJobs: ConfiguredJob[]) => {
+    setConfiguredJobs(newJobs);
+  };
+
+  // Export / Import
+  const handleExportCsv = () => {
+    const csvContent = exportJobsToCSV(jobs);
+    downloadFile(csvContent, `JobLog_${preferences.selectedState}_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+  };
+
+  const handleExportJson = () => {
+    const jsonBackup = exportFullBackup();
+    downloadFile(jsonBackup, `JobLog_Backup_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+  };
+
+  const handleImportFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = event => {
+      const content = event.target?.result as string;
+      if (content) {
+        const result = importFullBackup(content);
+        if (result.success) {
+          alert(result.message);
+          window.location.reload();
+        } else {
+          alert('Import failed: ' + result.message);
+        }
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Vault Master Passcode
+  const handleSetPasscode = (passcode: string) => {
+    setMasterPasscode(passcode);
+    setIsVaultUnlocked(true);
+    setHasMasterPasscode(true);
+    localStorage.setItem('joblog_vault_check_v1', 'enabled');
+  };
+
+  const handleUnlockVault = (passcode: string): boolean => {
+    setMasterPasscode(passcode);
+    setIsVaultUnlocked(true);
+    return true;
+  };
+
+  const handleLockVault = () => {
+    setMasterPasscode(null);
+    setIsVaultUnlocked(false);
+    setDecryptedPassword(undefined);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      {/* Hidden File Input for Backup Restore */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleImportFileSelected}
+        accept=".json,.csv"
+        className="hidden"
+      />
+
+      {/* Top Application Header */}
+      <Header
+        preferences={preferences}
+        onUpdatePreferences={setPreferences}
+        privacySettings={privacySettings}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onOpenNewJob={handleOpenNewJob}
+        onOpenPrint={() => setIsPrintModalOpen(true)}
+        onOpenPrivacy={() => setIsPrivacyModalOpen(true)}
+        onOpenDeviceSync={() => setIsDeviceSyncModalOpen(true)}
+        onOpenVault={() => setIsVaultModalOpen(true)}
+        isVaultUnlocked={isVaultUnlocked}
+        hasMasterPasscode={hasMasterPasscode}
+        totalJobs={totalJobs}
+        totalInterviews={totalInterviews}
+        totalOffers={totalOffers}
+        totalDenied={totalDenied}
+        onExportCsv={handleExportCsv}
+        onExportJson={handleExportJson}
+        onImportClick={() => fileInputRef.current?.click()}
+      />
+
+      {/* Privacy Consent Banner */}
+      {!privacySettings.hasConsented && (
+        <PrivacyBanner
+          onAccept={() => {
+            const updated = { ...privacySettings, hasConsented: true, consentTimestamp: Date.now() };
+            setPrivacySettings(updated);
+          }}
+          onOpenSettings={() => setIsPrivacyModalOpen(true)}
+        />
+      )}
+
+      {/* Main Container */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5">
+        {/* Job Applications View */}
+        {activeTab === 'jobs' && (
+          <div className="space-y-4">
+            {/* Active Selection Box: ONLY shown if Unemployment Claims Mode is ON! */}
+            {preferences.unemploymentClaimsMode && selectedJob && (
+              <TranscribeAssistant
+                selectedJob={selectedJob}
+                allJobs={jobs}
+                onSelectJob={handleSelectJob}
+                onToggleReported={handleToggleReported}
+                selectedState={preferences.selectedState}
+                decryptedPassword={decryptedPassword}
+                onUnlockVaultRequest={() => setIsVaultModalOpen(true)}
+              />
+            )}
+
+            <JobTable
+              jobs={jobs}
+              selectedJobId={selectedJobId}
+              unemploymentClaimsMode={preferences.unemploymentClaimsMode}
+              onSelectJob={handleSelectJob}
+              onEditJob={handleEditJob}
+              onDeleteJob={handleDeleteJob}
+              onToggleReported={handleToggleReported}
+              onStatusChange={handleStatusChange}
+            />
+          </div>
+        )}
+
+        {/* Weekly Certifications & Confirmations View (Only available in Claims mode) */}
+        {activeTab === 'weekly' && preferences.unemploymentClaimsMode && (
+          <WeeklyComplianceView
+            jobs={jobs}
+            weeklySummaries={weeklySummaries}
+            confirmations={confirmations}
+            selectedState={preferences.selectedState}
+            onAddConfirmation={handleAddConfirmation}
+            onUpdateConfirmation={handleUpdateConfirmation}
+            onDeleteConfirmation={handleDeleteConfirmation}
+          />
+        )}
+
+        {/* Earnings View */}
+        {activeTab === 'earnings' && (
+          <EarningsCalculatorView
+            earnings={earnings}
+            configuredJobs={configuredJobs}
+            onSaveConfiguredJobs={handleSaveConfiguredJobs}
+            onAddEarnings={handleAddEarnings}
+            onDeleteEarnings={handleDeleteEarnings}
+          />
+        )}
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-slate-200 py-3.5 px-6 text-center text-xs text-slate-500 no-print mt-auto">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span className="font-medium text-slate-700">JobLog • Job Application Tracker</span>
+          <span className="text-[11px] text-slate-400">
+            Local device storage • Zero data sharing
+          </span>
+        </div>
+      </footer>
+
+      {/* Modals */}
+      <JobModal
+        isOpen={isJobModalOpen}
+        onClose={() => setIsJobModalOpen(false)}
+        onSave={handleSaveJob}
+        initialJob={editingJob}
+        masterPasscode={masterPasscode}
+      />
+
+      <PrintableLogModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        jobs={jobs}
+        profile={profile}
+        selectedState={preferences.selectedState}
+        onUpdateProfile={setProfile}
+      />
+
+      <DeviceSyncModal
+        isOpen={isDeviceSyncModalOpen}
+        onClose={() => setIsDeviceSyncModalOpen(false)}
+        privacySettings={privacySettings}
+        onAuthorizeDevice={name => {
+          authorizeDevice(name);
+          setPrivacySettings(getPrivacySettings());
+        }}
+        onRevokeAllOtherDevices={() => {
+          revokeAllOtherDevices();
+          setPrivacySettings(getPrivacySettings());
+        }}
+        onToggleSync={enabled => {
+          const updated = { ...privacySettings, allowCrossDeviceSync: enabled };
+          setPrivacySettings(updated);
+        }}
+      />
+
+      <VaultModal
+        isOpen={isVaultModalOpen}
+        onClose={() => setIsVaultModalOpen(false)}
+        hasMasterPasscode={hasMasterPasscode}
+        isUnlocked={isVaultUnlocked}
+        onSetPasscode={handleSetPasscode}
+        onUnlockVault={handleUnlockVault}
+        onLockVault={handleLockVault}
+      />
+
+      <PrivacySettingsModal
+        isOpen={isPrivacyModalOpen}
+        onClose={() => setIsPrivacyModalOpen(false)}
+        settings={privacySettings}
+        onUpdateSettings={setPrivacySettings}
+        totalJobs={totalJobs}
+        onClearAllData={() => {
+          clearAllLocalData();
+          window.location.reload();
+        }}
+        onExportBackup={handleExportJson}
+      />
+    </div>
+  );
+};
+
+export default App;
