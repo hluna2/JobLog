@@ -1,6 +1,6 @@
-# ClaimTrack GA - Georgia Work Search & Job Application Tracker
+# JobLog - Job Application & Work Search Tracker
 
-A secure, privacy-first, and easy-to-use web application designed to track job applications, optimize weekly unemployment certifications for the **Georgia Department of Labor (GDOL / MyUI Claimant Portal)**, securely vault portal credentials, and generate audit-proof printable work search logs.
+A simple, fast, secure, and privacy-first web application designed to track job applications, optimize weekly unemployment certifications for any state (including the **Georgia Department of Labor GDOL / MyUI Claimant Portal**), securely vault portal credentials, calculate part-time wages with Excel formula support, and generate audit-proof printable work search logs.
 
 ---
 
@@ -116,10 +116,10 @@ You can deploy this app so anyone can use it, completely free:
 
 ---
 
-## 📁 Pre-Loaded Real Data
-The application comes pre-loaded with your entire historical log of **140+ applications**, **50+ weekly compliance logs**, **official MyUI confirmation numbers**, and **Publix / Chick-Fil-A hours & gross earnings records**.
+## 📁 Privacy & Data Isolation
+The public repository contains zero personal data by default, so any visitor or user who deploys the app gets their own clean, empty workspace with 0 records. All application data, earnings records, and portal credentials remain 100% private in local browser storage on each individual user's device.
 
-You can also use the **Data** menu in the top bar to:
-- Export to **CSV** (for Microsoft Excel or GDOL submission)
+You can use the **Data** menu in the top bar to:
+- Export to **CSV** (for Microsoft Excel or state unemployment submission)
 - Export full **JSON Backup**
-- Restore / Import from any backup anytime
+- Restore / Import from any backup JSON anytime
