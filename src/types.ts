@@ -1,4 +1,4 @@
-export type JobStatus = 'Applied' | 'Interview' | 'Offer' | 'Denied' | 'Saved';
+export type JobStatus = 'Applied' | 'Viewed' | 'Interview' | 'Offer' | 'Denied' | 'Saved';
 
 export type ContactType = 'New' | 'Follow-up' | 'Networking' | 'Inquiry';
 

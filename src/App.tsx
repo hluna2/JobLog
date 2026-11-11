@@ -38,6 +38,7 @@ import {
 } from './services/storage';
 import { exportJobsToCSV, downloadFile } from './utils/csv';
 import { decryptSecret } from './utils/crypto';
+import { normalizeJobSource } from './utils/source';
 
 // Components
 import { Header } from './components/Header';
@@ -72,7 +73,7 @@ export const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'employer' | 'status'>('date-desc');
+  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'employer' | 'source' | 'status'>('date-desc');
 
   // Filtered and Sorted Jobs (Newest applications at the top by default)
   const filteredJobs = useMemo(() => {
@@ -87,7 +88,10 @@ export const App: React.FC = () => {
           job.result.toLowerCase().includes(searchQuery.toLowerCase());
 
         const matchesStatus = statusFilter === 'all' || job.status.toLowerCase() === statusFilter.toLowerCase();
-        const matchesSource = sourceFilter === 'all' || job.jobSource.toLowerCase() === sourceFilter.toLowerCase();
+        const matchesSource =
+          sourceFilter === 'all' ||
+          normalizeJobSource(job.jobSource).toLowerCase() === sourceFilter.toLowerCase() ||
+          job.jobSource.toLowerCase() === sourceFilter.toLowerCase();
 
         return matchesSearch && matchesStatus && matchesSource;
       })
@@ -100,6 +104,9 @@ export const App: React.FC = () => {
         }
         if (sortBy === 'employer') {
           return a.employerName.localeCompare(b.employerName);
+        }
+        if (sortBy === 'source') {
+          return normalizeJobSource(a.jobSource).localeCompare(normalizeJobSource(b.jobSource));
         }
         if (sortBy === 'status') {
           return a.status.localeCompare(b.status);
@@ -440,10 +447,10 @@ export const App: React.FC = () => {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-3 sm:py-3.5">
         {/* Job Applications View */}
         {activeTab === 'jobs' && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* General Search Summary Dashboard */}
             <GeneralSummary jobs={jobs} />
 

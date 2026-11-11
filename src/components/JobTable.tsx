@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { JobApplication, JobStatus } from '../types';
 import { formatDaysAgo, calculateDaysAgoNumber } from '../utils/date';
+import { GENERAL_SOURCES, normalizeJobSource } from '../utils/source';
 import { ConfirmModal } from './ConfirmModal';
 
 interface JobTableProps {
@@ -30,8 +31,8 @@ interface JobTableProps {
   setStatusFilter: (s: string) => void;
   sourceFilter: string;
   setSourceFilter: (s: string) => void;
-  sortBy: 'date-desc' | 'date-asc' | 'employer' | 'status';
-  setSortBy: (s: 'date-desc' | 'date-asc' | 'employer' | 'status') => void;
+  sortBy: 'date-desc' | 'date-asc' | 'employer' | 'source' | 'status';
+  setSortBy: (s: 'date-desc' | 'date-asc' | 'employer' | 'source' | 'status') => void;
   selectedJobId: string | null;
   unemploymentClaimsMode: boolean;
   onSelectJob: (job: JobApplication) => void;
@@ -91,20 +92,14 @@ export const JobTable: React.FC<JobTableProps> = ({
     setTimeout(() => setCopiedKey(null), 1500);
   };
 
-  const uniqueSources = useMemo(() => {
-    const set = new Set<string>();
-    jobs.forEach(j => {
-      if (j.jobSource) set.add(j.jobSource);
-    });
-    return Array.from(set).sort();
-  }, [jobs]);
-
   const getStatusBadge = (status: JobStatus) => {
     switch (status) {
       case 'Offer':
         return 'bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold';
       case 'Interview':
         return 'bg-amber-50 text-amber-800 border border-amber-300 font-semibold';
+      case 'Viewed':
+        return 'bg-purple-50 text-purple-800 border border-purple-300 font-semibold';
       case 'Denied':
         return 'bg-rose-50 text-rose-800 border border-rose-300 font-semibold';
       case 'Applied':
@@ -124,6 +119,8 @@ export const JobTable: React.FC<JobTableProps> = ({
         return 'hover:bg-slate-50 bg-white border-l-4 border-l-emerald-500';
       case 'Interview':
         return 'hover:bg-slate-50 bg-white border-l-4 border-l-amber-500';
+      case 'Viewed':
+        return 'hover:bg-slate-50 bg-white border-l-4 border-l-purple-500';
       case 'Denied':
         return 'hover:bg-slate-50 bg-white border-l-4 border-l-rose-400';
       case 'Applied':
@@ -168,9 +165,10 @@ export const JobTable: React.FC<JobTableProps> = ({
               className="bg-transparent border-none text-slate-700 text-xs font-semibold focus:outline-none cursor-pointer"
             >
               <option value="all">All Statuses ({jobs.length})</option>
-              <option value="Offer">Offers</option>
-              <option value="Interview">Interviews</option>
               <option value="Applied">Applied</option>
+              <option value="Viewed">Viewed</option>
+              <option value="Interview">Interviews</option>
+              <option value="Offer">Offers</option>
               <option value="Denied">Denied</option>
               <option value="Saved">Saved</option>
             </select>
@@ -184,7 +182,7 @@ export const JobTable: React.FC<JobTableProps> = ({
               className="bg-transparent border-none text-slate-700 text-xs font-semibold focus:outline-none cursor-pointer"
             >
               <option value="all">All Sources</option>
-              {uniqueSources.map(s => (
+              {GENERAL_SOURCES.map(s => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -202,6 +200,7 @@ export const JobTable: React.FC<JobTableProps> = ({
               <option value="date-desc">Newest Date</option>
               <option value="date-asc">Oldest Date</option>
               <option value="employer">Company A-Z</option>
+              <option value="source">Job Source</option>
               <option value="status">Status</option>
             </select>
           </div>
@@ -263,21 +262,25 @@ export const JobTable: React.FC<JobTableProps> = ({
         {/* Scrollable Table Viewport with Internal Scrolling */}
         <div
           ref={tableScrollRef}
-          className="overflow-x-auto overflow-y-auto max-h-[560px] focus:outline-none"
+          className={`overflow-x-auto overflow-y-auto focus:outline-none ${
+            unemploymentClaimsMode
+              ? 'max-h-[360px]'
+              : 'max-h-[calc(100vh-310px)] min-h-[300px]'
+          }`}
           tabIndex={0}
         >
           <table className="w-full text-left text-xs border-collapse">
             <thead className="sticky top-0 bg-slate-50 z-10 border-b border-slate-200 shadow-xs select-none">
               <tr className="text-slate-600 font-semibold">
-                <th className="py-2.5 px-3 w-8 text-center bg-slate-50">#</th>
-                <th className="py-2.5 px-3 bg-slate-50">Date Applied</th>
-                <th className="py-2.5 px-3 bg-slate-50">Employer / Company</th>
-                <th className="py-2.5 px-3 bg-slate-50">Job Title & Location</th>
-                <th className="py-2.5 px-3 bg-slate-50">Website & Phone</th>
-                <th className="py-2.5 px-3 bg-slate-50">Source & Method</th>
-                <th className="py-2.5 px-3 bg-slate-50">Status</th>
-                <th className="py-2.5 px-3 bg-slate-50">Result / Notes</th>
-                <th className="py-2.5 px-3 text-right bg-slate-50">Actions</th>
+                <th className="py-2 px-3 w-8 text-center bg-slate-50">#</th>
+                <th className="py-2 px-3 bg-slate-50">Date Applied</th>
+                <th className="py-2 px-3 bg-slate-50">Employer / Company</th>
+                <th className="py-2 px-3 bg-slate-50">Job Title & Location</th>
+                <th className="py-2 px-3 bg-slate-50">Website & Phone</th>
+                <th className="py-2 px-3 bg-slate-50">Source & Method</th>
+                <th className="py-2 px-3 bg-slate-50">Status</th>
+                <th className="py-2 px-3 bg-slate-50">Result / Notes</th>
+                <th className="py-2 px-3 text-right bg-slate-50">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -300,12 +303,12 @@ export const JobTable: React.FC<JobTableProps> = ({
                       onClick={() => onSelectJob(job)}
                       className={`cursor-pointer transition-colors ${rowClass}`}
                     >
-                      <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px]">
+                      <td className="py-2 px-3 text-center text-slate-400 font-mono text-[11px]">
                         {idx + 1}
                       </td>
 
                       {/* Date Applied (Dynamically accurately computed!) */}
-                      <td className="py-2.5 px-3 whitespace-nowrap">
+                      <td className="py-2 px-3 whitespace-nowrap">
                         <div className="flex items-center gap-1 font-mono font-medium text-slate-800">
                           <span>{job.dateApplied}</span>
                           <button
@@ -326,7 +329,7 @@ export const JobTable: React.FC<JobTableProps> = ({
                       </td>
 
                       {/* Employer */}
-                      <td className="py-2.5 px-3">
+                      <td className="py-2 px-3">
                         <div className="flex items-center gap-1 font-bold text-slate-900">
                           <span>{job.employerName}</span>
                           <button
@@ -350,7 +353,7 @@ export const JobTable: React.FC<JobTableProps> = ({
                       </td>
 
                       {/* Title & Location */}
-                      <td className="py-2.5 px-3">
+                      <td className="py-2 px-3">
                         <div className="flex items-center gap-1 font-semibold text-slate-800">
                           <span>{job.jobTitle}</span>
                           <button
@@ -371,13 +374,13 @@ export const JobTable: React.FC<JobTableProps> = ({
                       </td>
 
                       {/* Website & Phone */}
-                      <td className="py-2.5 px-3">
+                      <td className="py-2 px-3">
                         {job.employerWebsite ? (
                           <div className="flex items-center gap-1">
                             <a
                               href={
                                 job.employerWebsite.startsWith('http')
-                                  ? job.employerWebsite
+                                   ? job.employerWebsite
                                   : `https://${job.employerWebsite}`
                               }
                               target="_blank"
@@ -424,15 +427,22 @@ export const JobTable: React.FC<JobTableProps> = ({
                       </td>
 
                       {/* Source & Method */}
-                      <td className="py-2.5 px-3 whitespace-nowrap">
-                        <div className="font-medium text-slate-700">{job.jobSource}</div>
+                      <td className="py-2 px-3 whitespace-nowrap">
+                        <div className="font-semibold text-slate-800">
+                          {normalizeJobSource(job.jobSource)}
+                        </div>
                         <div className="text-[10px] text-slate-400">
                           {job.applicationMethod || 'Online'}
+                          {job.jobSource && normalizeJobSource(job.jobSource) !== job.jobSource && (
+                            <span className="text-slate-400 font-mono ml-1">
+                              ({job.jobSource})
+                            </span>
+                          )}
                         </div>
                       </td>
 
                       {/* Status */}
-                      <td className="py-2.5 px-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                      <td className="py-2 px-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
                         <select
                           value={job.status}
                           onChange={e => onStatusChange(job.id, e.target.value as JobStatus)}
@@ -441,6 +451,7 @@ export const JobTable: React.FC<JobTableProps> = ({
                           )}`}
                         >
                           <option value="Applied">Applied</option>
+                          <option value="Viewed">Viewed</option>
                           <option value="Interview">Interview</option>
                           <option value="Offer">Offer</option>
                           <option value="Denied">Denied</option>
@@ -449,7 +460,7 @@ export const JobTable: React.FC<JobTableProps> = ({
                       </td>
 
                       {/* Notes / Result */}
-                      <td className="py-2.5 px-3">
+                      <td className="py-2 px-3">
                         {job.result && job.result !== 'NA' && (
                           <div className="font-semibold text-slate-800 text-[11px]">
                             {job.result}
@@ -461,7 +472,7 @@ export const JobTable: React.FC<JobTableProps> = ({
                       </td>
 
                       {/* Actions */}
-                      <td className="py-2.5 px-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                      <td className="py-2 px-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           {unemploymentClaimsMode && (
                             <button

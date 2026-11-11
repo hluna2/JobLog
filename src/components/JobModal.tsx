@@ -208,6 +208,7 @@ export const JobModal: React.FC<JobModalProps> = ({
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none cursor-pointer"
               >
                 <option value="Applied">Applied / Pending (Blue)</option>
+                <option value="Viewed">Application Viewed by Employer (Purple)</option>
                 <option value="Interview">Interview Requested / Scheduled (Yellow)</option>
                 <option value="Offer">Got an Offer (Green)</option>
                 <option value="Denied">Denied / Rejected (Red)</option>
@@ -312,14 +313,14 @@ export const JobModal: React.FC<JobModalProps> = ({
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none"
               />
               <datalist id="source-suggestions">
-                <option value="Worksource GA" />
-                <option value="Employ Georgia" />
                 <option value="Indeed" />
                 <option value="LinkedIn" />
+                <option value="WorkSource GA" />
                 <option value="Company Website" />
-                <option value="Career Fair" />
-                <option value="Professor Referral" />
                 <option value="Recruiter Contact" />
+                <option value="ZipRecruiter" />
+                <option value="Handshake / College" />
+                <option value="Other / Networking" />
               </datalist>
             </div>
 

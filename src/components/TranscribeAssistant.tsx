@@ -162,6 +162,8 @@ export const TranscribeAssistant: React.FC<TranscribeAssistantProps> = ({
         return 'text-emerald-800 bg-emerald-50 border-emerald-300';
       case 'Interview':
         return 'text-amber-800 bg-amber-50 border-amber-300';
+      case 'Viewed':
+        return 'text-purple-800 bg-purple-50 border-purple-300';
       case 'Denied':
         return 'text-rose-800 bg-rose-50 border-rose-300';
       case 'Applied':
@@ -210,6 +212,7 @@ export const TranscribeAssistant: React.FC<TranscribeAssistantProps> = ({
                 title="Change status - saves immediately to local storage"
               >
                 <option value="Applied">Applied (Blue)</option>
+                <option value="Viewed">Viewed (Purple)</option>
                 <option value="Interview">Interview (Yellow)</option>
                 <option value="Offer">Offer (Green)</option>
                 <option value="Denied">Denied (Red)</option>
